@@ -300,20 +300,21 @@ exec_extension (const char *filename, const char *lc_data, int *move_dir,
 #   define FILE_CMD "file "
 #endif
 
-/*
- * Run the "file" command on the local file.
- * Return 1 if the data is valid, 0 otherwise, -1 for fatal errors.
- */
+/*  
+ * Run cmd_file with args, put in buf[buflen] result.
+ * If error, put in buf[0] = '\0';
+ *
+ * NOTES: buf is string, always end '\0' char.
+ *  */
+
 static int
-get_file_type_local (const char *filename, char *buf, int buflen)
+get_popen_information(const char *cmd_file, const char *args,  char *buf, int buflen)
 {
     int read_bytes = 0;
 
-    char *tmp = name_quote (filename, 0);
-    char *command = g_strconcat (FILE_CMD, tmp, " 2>/dev/null", (char *) 0);
+    char *command = g_strconcat (cmd_file, args, " 2>/dev/null", (char *) 0);
     FILE *f = popen (command, "r");
 
-    g_free (tmp);
     g_free (command);
     if (f != NULL) {
 #ifdef __QNXNTO__
@@ -325,13 +326,47 @@ get_file_type_local (const char *filename, char *buf, int buflen)
 	read_bytes = (fgets (buf, buflen, f)
 		      != NULL);
 	if (read_bytes == 0)
+  /* if(buflen > 0) // ;-) */
 	    buf[0] = 0;
 	pclose (f);
-    } else {
+    } else {                              
+  /* if(buflen > 0) // ;-) */
+	buf[0] = 0; /* Paranoid termination */
 	return -1;
     }
+	  
+    /* Paranoid termination */
+	  buf[buflen - 1] = 0;
 
     return (read_bytes > 0);
+}
+
+/*
+ * Run the "file" command on the local file.
+ * Return 1 if the data is valid, 0 otherwise, -1 for fatal errors.
+ */
+static int
+get_file_type_local (const char *filename, char *buf, int buflen)
+{
+    int read_bytes = 0;
+    char *tmp = name_quote (filename, 0);
+
+    return get_popen_information(FILE_CMD, tmp, buf, buflen);
+}
+
+/*
+ * Run the "enca" command on the local file.
+ * Return 1 if the data is valid, 0 otherwise, -1 for fatal errors.
+ */
+static int
+get_file_encoding_local (const char *filename, char *buf, int buflen)
+{
+    int read_bytes = 0;
+    char *tmp = name_quote (filename, 0);
+    int ret = get_popen_information("enca -L ru -i ", tmp, buf, buflen);
+    g_free (tmp);
+
+    return ret;
 }
 
 
@@ -348,6 +383,8 @@ regex_check_type (const char *filename, const char *ptr, int *have_type)
 
     /* Following variables are valid if *have_type is 1 */
     static char content_string[2048];
+    static char encoding_id[21]; // CSISO51INISCYRILLIC -- 20
+    static int got_encoding_data = 0;
     static int content_shift = 0;
     static int got_data = 0;
 
@@ -366,16 +403,30 @@ regex_check_type (const char *filename, const char *ptr, int *have_type)
 	    return -1;
 
 	realname = localfile;
-	got_data =
+
+  got_encoding_data =
+    get_file_encoding_local (localfile, encoding_id,
+				 sizeof (encoding_id));
+	mc_ungetlocalcopy (filename, localfile, 0);
+
+  if( got_encoding_data > 0 )
+  {
+	  char *pp;
+	  if ((pp = strchr (encoding_id, '\n')) != 0)
+		  *pp = 0;
+
+    source_codepage = get_codepage_index( encoding_id );
+    if(source_codepage == -1)  
+       source_codepage = default_source_codepage;
+  }
+
+  
+  got_data =
 	    get_file_type_local (localfile, content_string,
 				 sizeof (content_string));
-	mc_ungetlocalcopy (filename, localfile, 0);
 
 	if (got_data > 0) {
 	    char *pp;
-
-	    /* Paranoid termination */
-	    content_string[sizeof (content_string) - 1] = 0;
 
 	    if ((pp = strchr (content_string, '\n')) != 0)
 		*pp = 0;

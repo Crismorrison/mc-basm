@@ -40,6 +40,7 @@
 
 /* Numbers of (file I/O) and (input/display) codepages. -1 if not selected */
 int source_codepage = -1;
+int default_source_codepage = -1;
 int display_codepage = -1;
 
 static unsigned char
@@ -119,6 +120,7 @@ do_select_codepage (void)
 	return FALSE;
 
     source_codepage = r;
+    default_source_codepage = source_codepage;
 
     errmsg = init_translation_table (r == SELECT_CHARSET_NO_TRANSLATE ?
 					display_codepage : source_codepage,
