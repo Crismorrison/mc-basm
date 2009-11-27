@@ -825,7 +825,6 @@ load_setup (void)
   autodetect_codeset = mc_config_get_string(mc_main_config, "Misc", "autodetect_codeset", "");
 	if ( (autodetect_codeset[0] != '\0') && ( strcmp(autodetect_codeset, "off") ) )
       is_autodetect_codeset_enabled=TRUE;
-	/*g_free(autodetect_codeset);*/ /* FIXME NEED FREE */
   
     init_translation_table( source_codepage, display_codepage );
     if ( get_codepage_id( display_codepage ) )
