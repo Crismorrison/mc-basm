@@ -388,6 +388,8 @@ save_setup (void)
 		 get_codepage_id( display_codepage ));
     mc_config_set_string(mc_main_config, "Misc" , "source_codepage",
 		 get_codepage_id( source_codepage ));
+    mc_config_set_string(mc_main_config, "Misc" , "autodetect_codeset",
+		 autodetect_codeset );
 #endif /* HAVE_CHARSET */
     tmp_profile = g_build_filename (home_dir, MC_USERCONF_DIR, MC_CONFIG_FILE, NULL);
     ret = mc_config_save_to_file (mc_main_config, tmp_profile, NULL);
@@ -817,7 +819,16 @@ load_setup (void)
 	    cp_source = get_codepage_id (source_codepage);
 	}
 	g_free(buffer);
-    }
+   }
+  
+  autodetect_codeset = mc_config_get_string(mc_main_config, "Misc", "autodetect_codeset", "");
+	if ( autodetect_codeset[0] != '\0' )
+	{
+	    source_codepage = get_codepage_index( buffer );
+	    cp_source = get_codepage_id (source_codepage);
+	}
+	//g_free(autodetect_codeset); // FIXME NEED FREE
+  
     init_translation_table( source_codepage, display_codepage );
     if ( get_codepage_id( display_codepage ) )
         utf8_display = str_isutf8 (get_codepage_id( display_codepage ));

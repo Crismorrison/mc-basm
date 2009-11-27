@@ -46,6 +46,7 @@ extern int option_tab_spacing;
 extern int source_codepage;
 extern int default_source_codepage;
 extern int display_codepage;
+extern char* autodetect_codeset;
 #else
 extern int eight_bit_clean;
 extern int full_eight_bits;

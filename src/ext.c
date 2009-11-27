@@ -361,12 +361,19 @@ get_file_type_local (const char *filename, char *buf, int buflen)
 static int
 get_file_encoding_local (const char *filename, char *buf, int buflen)
 {
-    int read_bytes = 0;
-    char *tmp = name_quote (filename, 0);
-    int ret = get_popen_information("enca -L ru -i ", tmp, buf, buflen);
-    g_free (tmp);
-
-    return ret;
+    if(autodetect_codeset[0] != '\0')
+    {
+      int read_bytes = 0;
+      char *tmp = name_quote (filename, 0);
+      char *lang = name_quote (autodetect_codeset, 0);
+      char *args= g_strconcat (" -L", lang, " -i ", tmp, (char *) 0);
+      int ret = get_popen_information("enca", args, buf, buflen);
+      g_free (args);
+      g_free (lang);
+      g_free (tmp);
+      return ret;
+    }
+  return 0;
 }
 
 
