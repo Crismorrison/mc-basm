@@ -174,6 +174,11 @@ mcview_display_status (mcview_t * view)
                 tty_printf (_(">= %s bytes"), size_trunc (filesize));
             }
         }
+        if (width > 62 + 11){
+          char* cp = get_codepage_id (source_codepage);
+          if(cp)
+            tty_printf ("    %s", cp);
+        }
         if (width > 26) {
             mcview_percent (view, view->hex_mode ? view->hex_cursor : view->dpy_end);
         }
