@@ -361,7 +361,7 @@ get_file_type_local (const char *filename, char *buf, int buflen)
 static int
 get_file_encoding_local (const char *filename, char *buf, int buflen)
 {
-    if(autodetect_codeset[0] != '\0')
+    if(is_autodetect_codeset_enabled == TRUE)
     {
       int read_bytes = 0;
       char *tmp = name_quote (filename, 0);

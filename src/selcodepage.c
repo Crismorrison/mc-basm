@@ -42,7 +42,8 @@
 int source_codepage = -1;
 int default_source_codepage = -1;
 int display_codepage = -1;
-char* autodetect_codeset;
+char* autodetect_codeset = 0;
+gboolean is_autodetect_codeset_enabled=FALSE;
 
 static unsigned char
 get_hotkey (int n)
