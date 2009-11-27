@@ -300,7 +300,7 @@ exec_extension (const char *filename, const char *lc_data, int *move_dir,
 #   define FILE_CMD "file "
 #endif
 
-/*  
+/*
  * Run cmd_file with args, put in buf[buflen] result.
  * If error, put in buf[0] = '\0';
  *
@@ -326,17 +326,16 @@ get_popen_information(const char *cmd_file, const char *args,  char *buf, int bu
 	read_bytes = (fgets (buf, buflen, f)
 		      != NULL);
 	if (read_bytes == 0)
-  /* if(buflen > 0) // ;-) */
+/* if(buflen > 0) // ;-) */
 	    buf[0] = 0;
 	pclose (f);
-    } else {                              
-  /* if(buflen > 0) // ;-) */
+    } else {
+/* if(buflen > 0) // ;-) */
 	buf[0] = 0; /* Paranoid termination */
 	return -1;
     }
-	  
     /* Paranoid termination */
-	  buf[buflen - 1] = 0;
+    buf[buflen - 1] = 0;
 
     return (read_bytes > 0);
 }
@@ -363,17 +362,17 @@ get_file_encoding_local (const char *filename, char *buf, int buflen)
 {
     if(is_autodetect_codeset_enabled == TRUE)
     {
-      int read_bytes = 0;
-      char *tmp = name_quote (filename, 0);
-      char *lang = name_quote (autodetect_codeset, 0);
-      char *args= g_strconcat (" -L", lang, " -i ", tmp, (char *) 0);
-      int ret = get_popen_information("enca", args, buf, buflen);
-      g_free (args);
-      g_free (lang);
-      g_free (tmp);
-      return ret;
+	int read_bytes = 0;
+	char *tmp = name_quote (filename, 0);
+	char *lang = name_quote (autodetect_codeset, 0);
+	char *args= g_strconcat (" -L", lang, " -i ", tmp, (char *) 0);
+	int ret = get_popen_information("enca", args, buf, buflen);
+	g_free (args);
+	g_free (lang);
+	g_free (tmp);
+	return ret;
     }
-  return 0;
+    return 0;
 }
 
 
@@ -390,7 +389,7 @@ regex_check_type (const char *filename, const char *ptr, int *have_type)
 
     /* Following variables are valid if *have_type is 1 */
     static char content_string[2048];
-    static char encoding_id[21]; // CSISO51INISCYRILLIC -- 20
+    static char encoding_id[21]; /* example: CSISO51INISCYRILLIC -- 20 */
     static int got_encoding_data = 0;
     static int content_shift = 0;
     static int got_data = 0;
@@ -411,48 +410,48 @@ regex_check_type (const char *filename, const char *ptr, int *have_type)
 
 	realname = localfile;
 
-  got_encoding_data =
-    get_file_encoding_local (localfile, encoding_id,
-				 sizeof (encoding_id));
+	got_encoding_data =
+	    get_file_encoding_local (localfile, encoding_id,
+		sizeof (encoding_id));
 	mc_ungetlocalcopy (filename, localfile, 0);
 
-  if( got_encoding_data > 0 )
-  {
-	  char *pp;
-	  if ((pp = strchr (encoding_id, '\n')) != 0)
-		  *pp = 0;
-
-    source_codepage = get_codepage_index( encoding_id );
-    if(source_codepage == -1)  
-       source_codepage = default_source_codepage;
-  }
-
-  
-  got_data =
-	    get_file_type_local (localfile, content_string,
-				 sizeof (content_string));
-
-	if (got_data > 0) {
+	if( got_encoding_data > 0 )
+	{
 	    char *pp;
-
-	    if ((pp = strchr (content_string, '\n')) != 0)
+	    if ((pp = strchr (encoding_id, '\n')) != 0)
 		*pp = 0;
 
-	    if (!strncmp (content_string, realname, strlen (realname))) {
-		/* Skip "realname: " */
-		content_shift = strlen (realname);
-		if (content_string[content_shift] == ':') {
-		    /* Solaris' file prints tab(s) after ':' */
-		    for (content_shift++;
-			 content_string[content_shift] == ' '
-			 || content_string[content_shift] == '\t';
-			 content_shift++);
-		}
-	    }
-	} else {
-	    /* No data */
-	    content_string[0] = 0;
+	source_codepage = get_codepage_index( encoding_id );
+	if(source_codepage == -1)
+	    source_codepage = default_source_codepage;
 	}
+
+
+  got_data =
+    get_file_type_local (localfile, content_string,
+				 sizeof (content_string));
+
+  if (got_data > 0) {
+    char *pp;
+
+    if ((pp = strchr (content_string, '\n')) != 0)
+	*pp = 0;
+
+    if (!strncmp (content_string, realname, strlen (realname))) {
+	/* Skip "realname: " */
+	content_shift = strlen (realname);
+	if (content_string[content_shift] == ':') {
+	    /* Solaris' file prints tab(s) after ':' */
+	    for (content_shift++;
+		 content_string[content_shift] == ' '
+		 || content_string[content_shift] == '\t';
+		 content_shift++);
+	}
+    }
+  } else {
+    /* No data */
+    content_string[0] = 0;
+  }
 	g_free (realname);
     }
 
