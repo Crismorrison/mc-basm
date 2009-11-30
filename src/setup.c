@@ -384,11 +384,11 @@ save_setup (void)
 #endif /* USE_VFS && USE_NETCODE */
 
 #ifdef HAVE_CHARSET
-    mc_config_set_string(mc_main_config, "Misc" , "display_codepage",
-		 get_codepage_id( display_codepage ));
-    mc_config_set_string(mc_main_config, "Misc" , "source_codepage",
-		 get_codepage_id( default_source_codepage ));
-    mc_config_set_string(mc_main_config, "Misc" , "autodetect_codeset",
+    mc_config_set_string (mc_main_config, "Misc" , "display_codepage",
+		 get_codepage_id(display_codepage));
+    mc_config_set_string (mc_main_config, "Misc" , "source_codepage",
+		 get_codepage_id(default_source_codepage));
+    mc_config_set_string (mc_main_config, "Misc" , "autodetect_codeset",
 		 autodetect_codeset );
 #endif /* HAVE_CHARSET */
     tmp_profile = g_build_filename (home_dir, MC_USERCONF_DIR, MC_CONFIG_FILE, NULL);
@@ -815,16 +815,16 @@ load_setup (void)
 	buffer = mc_config_get_string(mc_main_config, "Misc", "source_codepage", "");
 	if ( buffer[0] != '\0' )
 	{
-	    default_source_codepage = get_codepage_index( buffer );
-	    source_codepage = default_source_codepage; /* Mabye source_codepage don't needed this */
+	    default_source_codepage = get_codepage_index(buffer);
+	    source_codepage = default_source_codepage; /* Maybe source_codepage don't needed this */
 	    cp_source = get_codepage_id (source_codepage);
 	}
 	g_free(buffer);
-   }
+    }
 
-  autodetect_codeset = mc_config_get_string(mc_main_config, "Misc", "autodetect_codeset", "");
-	if ( (autodetect_codeset[0] != '\0') && ( strcmp(autodetect_codeset, "off") ) )
-      is_autodetect_codeset_enabled=TRUE;
+    autodetect_codeset = mc_config_get_string(mc_main_config, "Misc", "autodetect_codeset", "");
+    if ((autodetect_codeset[0] != '\0') && (strcmp (autodetect_codeset, "off")))
+	is_autodetect_codeset_enabled = TRUE;
 
     init_translation_table( source_codepage, display_codepage );
     if ( get_codepage_id( display_codepage ) )

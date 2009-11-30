@@ -2257,7 +2257,7 @@ main (int argc, char *argv[])
     done_key ();
 #ifdef HAVE_CHARSET
     free_codepages_list ();
-    g_free(autodetect_codeset);
+    g_free (autodetect_codeset);
 #endif
     str_uninit_strings ();
 

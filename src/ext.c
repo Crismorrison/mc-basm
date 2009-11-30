@@ -326,11 +326,11 @@ get_popen_information(const char *cmd_file, const char *args,  char *buf, int bu
 	read_bytes = (fgets (buf, buflen, f)
 		      != NULL);
 	if (read_bytes == 0)
-/* if(buflen > 0) // ;-) */
+/* if (buflen > 0) // ;-) */
 	    buf[0] = 0;
 	pclose (f);
     } else {
-/* if(buflen > 0) // ;-) */
+/* if (buflen > 0) // ;-) */
 	buf[0] = 0; /* Paranoid termination */
 	return -1;
     }
@@ -350,7 +350,7 @@ get_file_type_local (const char *filename, char *buf, int buflen)
     int read_bytes = 0;
     char *tmp = name_quote (filename, 0);
 
-    return get_popen_information(FILE_CMD, tmp, buf, buflen);
+    return get_popen_information (FILE_CMD, tmp, buf, buflen);
 }
 
 /*
@@ -365,7 +365,7 @@ get_file_encoding_local (const char *filename, char *buf, int buflen)
 	char *tmp = name_quote (filename, 0);
 	char *lang = name_quote (autodetect_codeset, 0);
 	char *args= g_strconcat (" -L", lang, " -i ", tmp, (char *) 0);
-	int ret = get_popen_information("enca", args, buf, buflen);
+	int ret = get_popen_information ("enca", args, buf, buflen);
 	g_free (args);
 	g_free (lang);
 	g_free (tmp);
@@ -414,15 +414,14 @@ regex_check_type (const char *filename, const char *ptr, int *have_type)
 		sizeof (encoding_id));
 	mc_ungetlocalcopy (filename, localfile, 0);
 
-	if( got_encoding_data > 0 )
-	{
-	    char *pp;
-	    if ((pp = strchr (encoding_id, '\n')) != 0)
+	if (got_encoding_data > 0){
+	    char *pp = strchr (encoding_id, '\n');
+	    if (pp != NULL)
 		*pp = 0;
 
-	source_codepage = get_codepage_index( encoding_id );
-	if(source_codepage == -1)
-	    source_codepage = default_source_codepage;
+	    source_codepage = get_codepage_index (encoding_id);
+	    if (source_codepage == -1)
+		source_codepage = default_source_codepage;
 	}
 
 
