@@ -820,6 +820,8 @@ edit_init (WEdit *edit, int lines, int columns, const char *filename,
     if (cp_id != NULL)
         edit->utf8 = str_isutf8 (cp_id);
     }
+    edit->force = REDRAW_COMPLETELY;
+    edit_refresh_cmd (edit);
 #endif
 
     edit->loading_done = 1;

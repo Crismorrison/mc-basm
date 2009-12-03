@@ -419,9 +419,12 @@ regex_check_type (const char *filename, const char *ptr, int *have_type)
 	    if (pp != NULL)
 		*pp = 0;
 
-	    source_codepage = get_codepage_index (encoding_id);
-	    if (source_codepage == -1)
-		source_codepage = default_source_codepage;
+	    int cp_id;
+	    cp_id = get_codepage_index (encoding_id);
+	    if (cp_id == -1)
+		cp_id = default_source_codepage;
+
+	    do_set_codepage (cp_id);
 	}
 
 

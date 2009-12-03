@@ -111,6 +111,25 @@ select_charset (int center_y, int center_x, int current_charset, gboolean seldis
     }
 }
 
+/* Set codepage */
+
+gboolean
+do_set_codepage (int codepage)
+{
+    const char *errmsg = NULL;
+
+    source_codepage = codepage;
+    errmsg = init_translation_table (codepage == SELECT_CHARSET_NO_TRANSLATE ?
+					display_codepage : source_codepage,
+					display_codepage);
+    if (errmsg != NULL)
+        message (D_ERROR, MSG_ERROR, "%s", errmsg);
+
+    return (errmsg == NULL);
+}
+
+/* Show menu selecting codepage */
+
 gboolean
 do_select_codepage (void)
 {
@@ -121,16 +140,8 @@ do_select_codepage (void)
     if (r == SELECT_CHARSET_CANCEL)
 	return FALSE;
 
-    source_codepage = r;
-    default_source_codepage = source_codepage;
-
-    errmsg = init_translation_table (r == SELECT_CHARSET_NO_TRANSLATE ?
-					display_codepage : source_codepage,
-					display_codepage);
-    if (errmsg != NULL)
-        message (D_ERROR, MSG_ERROR, "%s", errmsg);
-
-    return (errmsg == NULL);
+    default_source_codepage = r;
+    return do_set_codepage (default_source_codepage);
 }
 
 #endif				/* HAVE_CHARSET */
