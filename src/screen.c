@@ -2355,6 +2355,9 @@ do_enter_on_file_entry (file_entry *fe)
 	shell_execute (cmd, 0);
 	g_free (cmd);
     }
+#if HAVE_CHARSET
+  source_codepage = default_source_codepage;
+#endif
 
     return 1;
 }
@@ -3150,7 +3153,7 @@ set_panel_encoding (WPanel *panel)
     const char *errmsg;
     int r;
 
-    r = select_charset (-1, -1, source_codepage, FALSE);
+    r = select_charset (-1, -1, default_source_codepage, FALSE);
 
     if (r == SELECT_CHARSET_CANCEL)
 	return; /* Cancel */

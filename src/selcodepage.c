@@ -136,7 +136,7 @@ do_select_codepage (void)
     const char *errmsg = NULL;
     int r;
 
-    r = select_charset (-1, -1, source_codepage, FALSE);
+    r = select_charset (-1, -1, default_source_codepage, FALSE);
     if (r == SELECT_CHARSET_CANCEL)
 	return FALSE;
 
