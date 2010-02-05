@@ -390,11 +390,11 @@ save_setup (void)
 #endif /* ENABLE_VFS && USE_NETCODE */
 
 #ifdef HAVE_CHARSET
-    mc_config_set_string (mc_main_config, "Misc" , "display_codepage",
-		 get_codepage_id(display_codepage));
-    mc_config_set_string (mc_main_config, "Misc" , "source_codepage",
-		 get_codepage_id(default_source_codepage));
-    mc_config_set_string (mc_main_config, "Misc" , "autodetect_codeset",
+    mc_config_set_string(mc_main_config, "Misc" , "display_codepage",
+		 get_codepage_id( display_codepage ));
+    mc_config_set_string(mc_main_config, "Misc" , "source_codepage",
+		 get_codepage_id( source_codepage ));
+    mc_config_set_string(mc_main_config, "Misc" , "autodetect_codeset",
 		 autodetect_codeset );
 #endif /* HAVE_CHARSET */
     tmp_profile = g_build_filename (home_dir, MC_USERCONF_DIR, MC_CONFIG_FILE, NULL);
@@ -816,7 +816,7 @@ load_setup (void)
 	if ( buffer[0] != '\0' )
 	{
 	    default_source_codepage = get_codepage_index(buffer);
-	    source_codepage = default_source_codepage; /* Maybe source_codepage don't needed this */
+	    source_codepage = default_source_codepage;
 	    cp_source = get_codepage_id (source_codepage);
 	}
 	g_free(buffer);

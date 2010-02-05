@@ -318,7 +318,6 @@ get_popen_information(const char *cmd_file, const char *args,  char *buf, int bu
     int read_bytes = 0;
 
     char *command = g_strconcat (cmd_file, args, " 2>/dev/null", (char *) 0);
-    char *tmp = name_quote (cmd_file, 0);
     FILE *f = popen (command, "r");
 
     g_free (command);
@@ -434,31 +433,34 @@ regex_check_type (const char *filename, const char *ptr, int *have_type)
 	}
 
 
-  got_data =
-    get_file_type_local (localfile, content_string,
+	got_data =
+	    get_file_type_local (localfile, content_string,
 				 sizeof (content_string));
 
-  if (got_data > 0) {
-    char *pp;
+	if (got_data > 0) {
+	    char *pp;
 
-    if ((pp = strchr (content_string, '\n')) != 0)
-	*pp = 0;
+	    /* Paranoid termination */
+	    content_string[sizeof (content_string) - 1] = 0;
 
-    if (!strncmp (content_string, realname, strlen (realname))) {
-	/* Skip "realname: " */
-	content_shift = strlen (realname);
-	if (content_string[content_shift] == ':') {
-	    /* Solaris' file prints tab(s) after ':' */
-	    for (content_shift++;
-		 content_string[content_shift] == ' '
-		 || content_string[content_shift] == '\t';
-		 content_shift++);
+	    if ((pp = strchr (content_string, '\n')) != 0)
+		*pp = 0;
+
+	    if (!strncmp (content_string, realname, strlen (realname))) {
+		/* Skip "realname: " */
+		content_shift = strlen (realname);
+		if (content_string[content_shift] == ':') {
+		    /* Solaris' file prints tab(s) after ':' */
+		    for (content_shift++;
+			 content_string[content_shift] == ' '
+			 || content_string[content_shift] == '\t';
+			 content_shift++);
+		}
+	    }
+	} else {
+	    /* No data */
+	    content_string[0] = 0;
 	}
-    }
-  } else {
-    /* No data */
-    content_string[0] = 0;
-  }
 	g_free (realname);
     }
 
