@@ -31,13 +31,16 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "global.h"
+#include "lib/global.h"
 
-#include "../src/tty/tty.h"
-#include "../src/skin/skin.h"
-#include "../src/tty/mouse.h"		/* For Gpm_Event */
-#include "../src/tty/key.h"		/* XCTRL and ALT macros  */
-#include "../src/filehighlight/fhl.h"
+#include "lib/tty/tty.h"
+#include "lib/skin.h"
+#include "lib/tty/mouse.h"		/* For Gpm_Event */
+#include "lib/tty/key.h"		/* XCTRL and ALT macros  */
+#include "lib/filehighlight.h"
+#include "lib/mcconfig.h"
+#include "lib/vfs/mc-vfs/vfs.h"
+#include "lib/unixcompat.h"
 
 #include "dir.h"
 #include "panel.h"
@@ -50,13 +53,11 @@
 #include "command.h"		/* cmdline */
 #include "setup.h"		/* For loading/saving panel options */
 #include "user.h"
-#include "../src/mcconfig/mcconfig.h"
 #include "execute.h"
 #include "widget.h"
 #include "menu.h"		/* menubar_visible */
 #include "main-widgets.h"
 #include "main.h"
-#include "unixcompat.h"
 #include "mountlist.h"		/* my_statfs */
 #include "selcodepage.h"	/* select_charset () */
 #include "charsets.h"		/* get_codepage_id () */
@@ -139,11 +140,9 @@ set_colors (WPanel *panel)
 static void
 delete_format (format_e *format)
 {
-    format_e *next;
-
-    while (format){
-        next = format->next;
-        g_free(format->title);
+    while (format != NULL) {
+        format_e *next = format->next;
+        g_free (format->title);
         g_free (format);
         format = next;
      }
@@ -1004,14 +1003,14 @@ static char
     if (semi != NULL) {
         slash = strchr (semi, PATH_SEP);
         if (slash != NULL) {
-            result = g_strconcat (path, "/#enc:", encoding, NULL);
+            result = g_strconcat (path, "/#enc:", encoding, (char *) NULL);
         } else {
             *semi = 0;
-            result = g_strconcat (path, "/#enc:", encoding, NULL);
+            result = g_strconcat (path, "/#enc:", encoding, (char *) NULL);
             *semi = '#';
         }
     } else {
-        result = g_strconcat (path, "/#enc:", encoding, NULL);
+        result = g_strconcat (path, "/#enc:", encoding, (char *) NULL);
     }
 
     return result;
@@ -1181,7 +1180,7 @@ panel_clean_dir (WPanel *panel)
 static void
 panel_destroy (WPanel *p)
 {
-    int i;
+    size_t i;
 
     char *name = panel_save_name (p);
 
@@ -1292,11 +1291,9 @@ panel_new_with_dir (const char *panel_name, const char *wpath)
 
     /* Load format strings */
     err = set_panel_formats (panel);
-    if (err) {
+    if (err != 0)
 	set_panel_formats (panel);
-    }
 
-    
     /* Because do_load_dir lists files in current directory */
     if (wpath)
 	mc_chdir(wpath);
@@ -1529,7 +1526,7 @@ parse_display_format (WPanel *panel, const char *format, char **error, int issta
     while (*format){           /* format can be an empty string */
 	int found = 0;
 
-        darr = g_new (format_e, 1);
+        darr = g_new0 (format_e, 1);
 
         /* I'm so ugly, don't look at me :-) */
         if (!home)
@@ -1700,34 +1697,27 @@ int
 set_panel_formats (WPanel *p)
 {
     format_e *form;
-    char *err;
+    char *err = NULL;
     int retcode = 0;
 
     form = use_display_format (p, panel_format (p), &err, 0);
 
-    if (err){
+    if (err != NULL) {
         g_free (err);
         retcode = 1;
-    }
-    else {
-        if (p->format)
-    	    delete_format (p->format);
-
-	p->format = form;
+    } else {
+        delete_format (p->format);
+        p->format = form;
     }
 
-    if (show_mini_info){
-
+    if (show_mini_info) {
 	form = use_display_format (p, mini_status_format (p), &err, 1);
 
-	if (err){
+	if (err != NULL) {
 	    g_free (err);
 	    retcode += 2;
-	}
-	else {
-	    if (p->status_format)
-		delete_format (p->status_format);
-
+	} else {
+	    delete_format (p->status_format);
 	    p->status_format = form;
 	}
     }
@@ -1736,14 +1726,14 @@ set_panel_formats (WPanel *p)
     panel_update_cols (&(p->widget), p->frame_size);
 
     if (retcode)
-      message (D_ERROR, _("Warning" ), _( "User supplied format looks invalid, reverting to default." ) );
+        message (D_ERROR, _("Warning" ), _( "User supplied format looks invalid, reverting to default." ) );
     if (retcode & 0x01){
-      g_free (p->user_format);
-      p->user_format = g_strdup (DEFAULT_USER_FORMAT);
+        g_free (p->user_format);
+        p->user_format = g_strdup (DEFAULT_USER_FORMAT);
     }
     if (retcode & 0x02){
-      g_free (p->user_status_format [p->list_type]);
-      p->user_status_format [p->list_type] = g_strdup (DEFAULT_USER_FORMAT);
+        g_free (p->user_status_format [p->list_type]);
+        p->user_status_format [p->list_type] = g_strdup (DEFAULT_USER_FORMAT);
     }
 
     return retcode;
@@ -2334,7 +2324,7 @@ do_enter_on_file_entry (file_entry *fe)
 	     _("&No")) != 0)
 	    return 1;
     }
-#ifdef USE_VFS
+#ifdef ENABLE_VFS
     if (!vfs_current_is_local ()) {
 	char *tmp;
 	int ret;
@@ -3259,13 +3249,11 @@ update_one_panel_widget (WPanel *panel, int force_update,
 static void
 update_one_panel (int which, int force_update, const char *current_file)
 {
-    WPanel *panel;
-
-    if (get_display_type (which) != view_listing)
-	return;
-
-    panel = (WPanel *) get_panel_widget (which);
-    update_one_panel_widget (panel, force_update, current_file);
+    if (get_display_type (which) == view_listing) {
+	WPanel *panel;
+	panel = (WPanel *) get_panel_widget (which);
+	update_one_panel_widget (panel, force_update, current_file);
+    }
 }
 
 /* This routine reloads the directory in both panels. It tries to
@@ -3314,7 +3302,7 @@ panel_get_sortable_fields(gsize *array_size)
 
     lc_index = panel_get_num_of_sortable_fields();
 
-    ret = g_new0 (char *, lc_index + 1);
+    ret = g_try_new0 (char *, lc_index + 1);
     if (ret == NULL)
         return NULL;
 
@@ -3394,7 +3382,7 @@ panel_get_user_possible_fields(gsize *array_size)
 
     lc_index = panel_get_num_of_user_possible_fields();
 
-    ret = g_new0 (char *, lc_index + 1);
+    ret = g_try_new0 (char *, lc_index + 1);
     if (ret == NULL)
         return NULL;
 

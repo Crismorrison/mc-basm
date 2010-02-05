@@ -34,13 +34,21 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-#include "global.h"
+#include "lib/global.h"
 
-#include "../src/tty/tty.h"
-#include "../src/skin/skin.h"		/* INPUT_COLOR */
-#include "../src/tty/key.h"		/* XCTRL and ALT macros  */
+#include "lib/tty/tty.h"
+#include "lib/skin.h"		/* INPUT_COLOR */
+#include "lib/tty/key.h"		/* XCTRL and ALT macros  */
+#include "lib/mcconfig.h"	/* Load/save user formats */
+#include "lib/strutil.h"
 
-#include "../src/mcconfig/mcconfig.h"	/* Load/save user formats */
+#ifdef USE_NETCODE
+#   include "lib/vfs/mc-vfs/ftpfs.h"
+#endif
+
+#ifdef ENABLE_VFS
+#include "lib/vfs/mc-vfs/gc.h"
+#endif
 
 #include "dialog.h"		/* The nice dialog manager */
 #include "widget.h"		/* The widgets for the nice dialog manager */
@@ -54,19 +62,10 @@
 #include "tree.h"
 #include "layout.h"		/* for get_nth_panel_name proto */
 #include "background.h"		/* task_list */
-#include "strutil.h"
 
 #ifdef HAVE_CHARSET
 #include "charsets.h"
 #include "selcodepage.h"
-#endif
-
-#ifdef USE_NETCODE
-#   include "../vfs/ftpfs.h"
-#endif
-
-#ifdef USE_VFS
-#include "../vfs/gc.h"
 #endif
 
 
@@ -218,13 +217,14 @@ display_init (int radio_sel, char *init_text, int _check_status,
     return dd;
 }
 
+/* return list type */
 int
 display_box (WPanel *panel, char **userp, char **minip, int *use_msformat, int num)
 {
     int result = -1;
     Dlg_head *dd;
     char *section = NULL;
-    int i;
+    size_t i;
 
     if (panel == NULL) {
         const char *p = get_nth_panel_name (num);
@@ -369,27 +369,29 @@ sort_box (const panel_field_t *sort_format, int *reverse, int *case_sensitive, i
 void
 confirm_box (void)
 {
-    const int w_num = 7;
-
-    /* dialog sizes */
-    int dlg_width = 46;
-    int dlg_height = 12;
-
-    const char *title = _(" Confirmation ");
+    const char *title = _("Confirmation");
 
     QuickWidget conf_widgets [] =
     {
-	/* 0 */ QUICK_BUTTON (29, dlg_width, 9, dlg_height, N_("&Cancel"), B_CANCEL, NULL),
-	/* 1 */ QUICK_BUTTON (12, dlg_width, 9, dlg_height, N_("&OK"),     B_ENTER,  NULL),
-	/* 2 */ QUICK_CHECKBOX (3, dlg_width, 7, dlg_height, N_(" confirm di&Rectory hotlist delete "), &confirm_directory_hotlist_delete),
-	/* 3 */ QUICK_CHECKBOX (3, dlg_width, 6, dlg_height, N_(" confirm &Exit "), &confirm_exit),
-	/* 4 */ QUICK_CHECKBOX (3, dlg_width, 5, dlg_height, N_(" confirm e&Xecute "), &confirm_execute),
-	/* 5 */ QUICK_CHECKBOX (3, dlg_width, 4, dlg_height, N_(" confirm o&Verwrite "), &confirm_overwrite),
-	/* 6 */ QUICK_CHECKBOX (3, dlg_width, 3, dlg_height, N_(" confirm &Delete "), &confirm_delete),
+	/* 0 */ QUICK_BUTTON  (29, 46, 10, 13, N_("&Cancel"), B_CANCEL, NULL),
+	/* 1 */ QUICK_BUTTON  (12, 46, 10, 13, N_("&OK"),     B_ENTER,  NULL),
+/* TRANSLATORS: no need to translate 'Confirmation', it's just a context prefix */
+	/* 2 */ QUICK_CHECKBOX (3, 46, 8, 13, N_("Confirmation|&History cleanup"), &confirm_history_cleanup),
+	/* 3 */ QUICK_CHECKBOX (3, 46, 7, 13, N_("Confirmation|&Directory hotlist delete"), &confirm_directory_hotlist_delete),
+	/* 4 */ QUICK_CHECKBOX (3, 46, 6, 13, N_("Confirmation|E&xit"), &confirm_exit),
+	/* 5 */ QUICK_CHECKBOX (3, 46, 5, 13, N_("Confirmation|&Execute"), &confirm_execute),
+	/* 6 */ QUICK_CHECKBOX (3, 46, 4, 13, N_("Confirmation|O&verwrite"), &confirm_overwrite),
+	/* 7 */ QUICK_CHECKBOX (3, 46, 3, 13, N_("Confirmation|&Delete"), &confirm_delete),
 	QUICK_END
     };
 
-    int i;
+    const size_t w_num = sizeof (conf_widgets) / sizeof (conf_widgets[0]) - 1;
+
+    /* dialog sizes */
+    int dlg_width = 46;
+    int dlg_height = w_num + 5;
+
+    size_t i;
     int maxlen = 0;
     int cancel_len, ok_len, blen;
 
@@ -400,16 +402,16 @@ confirm_box (void)
 	conf_widgets [i].u.button.text = _(conf_widgets [i].u.button.text);
 
     for (i = 2; i < w_num; i++)
-	conf_widgets [i].u.checkbox.text = _(conf_widgets [i].u.checkbox.text);
+	conf_widgets [i].u.checkbox.text = Q_(conf_widgets [i].u.checkbox.text);
 #endif /* ENABLE_NLS */
 
     /* maximumr length of checkboxes */
     for (i = 2; i < w_num; i++)
-        maxlen = max (maxlen, str_term_width1 (conf_widgets [i].u.checkbox.text) + 3);
+        maxlen = max (maxlen, str_term_width1 (conf_widgets [i].u.checkbox.text) + 4);
 
     /* length of buttons */
-    cancel_len = str_term_width1 (conf_widgets [0].u.button.text) + 2;
-    ok_len = str_term_width1 (conf_widgets [0].u.button.text) + 4; /* default button */
+    cancel_len = str_term_width1 (conf_widgets [0].u.button.text) + 3;
+    ok_len = str_term_width1 (conf_widgets [1].u.button.text) + 5; /* default button */
 
     blen = cancel_len + ok_len + 2;
 
@@ -417,11 +419,13 @@ confirm_box (void)
     dlg_width = max (dlg_width, str_term_width1 (title) + 4);
 
     /* correct widget parameters */
-    for (i = 0; i < w_num; i++)
+    for (i = 0; i < w_num; i++) {
 	conf_widgets[i].x_divisions = dlg_width;
+	conf_widgets[i].y_divisions = dlg_height;
+    }
 
-    conf_widgets[0].relative_x = dlg_width * 2/3 - cancel_len/2;
-    conf_widgets[1].relative_x = dlg_width/3 - ok_len/2;
+    conf_widgets[1].relative_x = dlg_width/2 - blen/2;
+    conf_widgets[0].relative_x = conf_widgets[1].relative_x + ok_len + 2;
 
     {
 	QuickDialog confirmation =
@@ -689,7 +693,7 @@ tree_box (const char *current_dir)
     return val;
 }
 
-#ifdef USE_VFS
+#ifdef ENABLE_VFS
 
 static char *ret_timeout;
 
@@ -743,7 +747,7 @@ configure_vfs (void)
 	"[Virtual FS]", confvfs_widgets, FALSE
     };
 
-#ifdef SE_NETCODE
+#ifdef USE_NETCODE
     g_snprintf (buffer3, sizeof (buffer3), "%i", ftpfs_directory_timeout);
 #endif
     g_snprintf (buffer2, sizeof (buffer2), "%i", vfs_timeout);
@@ -768,7 +772,7 @@ configure_vfs (void)
 #undef VFSY
 }
 
-#endif				/* USE_VFS */
+#endif				/* ENABLE_VFS */
 
 char *
 cd_dialog (void)
@@ -868,13 +872,13 @@ task_cb (int action)
 {
     TaskList *tl;
     int sig = 0;
-    
+
     if (!bg_list->list)
 	return 0;
 
     /* Get this instance information */
-    tl = (TaskList *) bg_list->current->data;
-    
+    listbox_get_current (bg_list, NULL, (void **) &tl);
+
 #  ifdef SIGTSTP
     if (action == B_STOP){
 	sig   = SIGSTOP;
@@ -952,7 +956,7 @@ jobs_cmd (void)
 			   "[Background jobs]", _("Background Jobs"),
 			   DLG_CENTER | DLG_REVERSE);
 
-    bg_list = listbox_new (2, 3, JOBS_Y - 9, JOBS_X - 7, NULL);
+    bg_list = listbox_new (2, 3, JOBS_Y - 9, JOBS_X - 7, FALSE, NULL);
     add_widget (jobs_dlg, bg_list);
 
 	i = n_buttons;
@@ -972,7 +976,7 @@ jobs_cmd (void)
 }
 #endif /* WITH_BACKGROUND */
 
-#ifdef WITH_SMBFS
+#ifdef ENABLE_VFS_SMB
 struct smb_authinfo *
 vfs_smb_get_authinfo (const char *host, const char *share, const char *domain,
 		      const char *user)
@@ -1064,7 +1068,7 @@ vfs_smb_get_authinfo (const char *host, const char *share, const char *domain,
         return_value = 0;
         break;
     default:
-        return_value = g_new (struct smb_authinfo, 1);
+        return_value = g_try_new (struct smb_authinfo, 1);
         if (return_value) {
             return_value->host = g_strdup (host);
             return_value->share = g_strdup (share);
@@ -1078,4 +1082,4 @@ vfs_smb_get_authinfo (const char *host, const char *share, const char *domain,
              
     return return_value;
 }
-#endif /* WITH_SMBFS */
+#endif /* ENABLE_VFS_SMB */

@@ -33,22 +33,23 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "global.h"
+#include "lib/global.h"
 
-#include "../src/skin/skin.h"
+#include "lib/skin.h"
+#include "lib/vfs/mc-vfs/vfs.h"
+#include "lib/mcconfig.h"	/* Load/save directories panelize */
+#include "lib/strutil.h"
 
 #include "dialog.h"
 #include "widget.h"
 #include "wtools.h"		/* For common_dialog_repaint() */
 #include "setup.h"		/* For profile_bname */
-#include "../src/mcconfig/mcconfig.h"	/* Load/save directories panelize */
 #include "dir.h"
 #include "panel.h"		/* current_panel */
 #include "layout.h"		/* repaint_screen() */
 #include "main.h"
 #include "panelize.h"
 #include "history.h"
-#include "strutil.h"
 
 #define UX		5
 #define UY		2
@@ -90,11 +91,13 @@ static void
 update_command (void)
 {
     if (l_panelize->pos != last_listitem) {
-    	last_listitem = l_panelize->pos;
-        assign_text (pname, 
-            ((struct panelize *) l_panelize->current->data)->command);
+	struct panelize *data = NULL;
+
+	last_listitem = l_panelize->pos;
+	listbox_get_current (l_panelize, NULL, (void **) &data);
+	assign_text (pname, data->command);
 	pname->point = 0;
-        update_input (pname, 1);
+	update_input (pname, 1);
     }
 }
 
@@ -177,10 +180,10 @@ init_panelize (void)
 
     /* get new listbox */
     l_panelize =
-	listbox_new (UY + 1, UX + 1, 10, panelize_dlg->cols - 12, NULL);
+	listbox_new (UY + 1, UX + 1, 10, panelize_dlg->cols - 12, FALSE, NULL);
 
     while (current) {
-	listbox_add_item (l_panelize, 0, 0, current->label, current);
+	listbox_add_item (l_panelize, LISTBOX_APPEND_AT_END, 0, current->label, current);
 	current = current->next;
     }
 
@@ -292,8 +295,13 @@ external_panelize (void)
 	break;
 
     case B_REMOVE:
-	remove_from_panelize (l_panelize->current->data);
+    {
+	struct panelize *entry;
+
+	listbox_get_current (l_panelize, NULL, (void **) &entry);
+	remove_from_panelize (entry);
 	break;
+    }
 
     case B_ENTER:
 	target = pname->buffer;

@@ -39,12 +39,15 @@
 #include <string.h>
 #include <sys/types.h>
 
-#include "global.h"
+#include "lib/global.h"
 
-#include "../src/tty/tty.h"
-#include "../src/skin/skin.h"
-#include "../src/tty/mouse.h"
-#include "../src/tty/key.h"
+#include "lib/tty/tty.h"
+#include "lib/skin.h"
+#include "lib/tty/mouse.h"
+#include "lib/tty/key.h"
+#include "lib/vfs/mc-vfs/vfs.h"
+#include "lib/fileloc.h"
+#include "lib/strutil.h"
 
 #include "wtools.h"	/* message() */
 #include "dir.h"
@@ -62,8 +65,6 @@
 #include "cmddef.h"
 #include "keybind.h"
 #include "history.h"
-#include "strutil.h"
-#include "fileloc.h"
 #include "tree.h"
 
 const global_keymap_t *tree_map;
@@ -235,10 +236,8 @@ show_tree (WTree *tree)
     }
 
     g_free (tree->tree_shown);
-    tree->tree_shown = g_new (tree_entry*, tree_lines);
+    tree->tree_shown = g_new0 (tree_entry *, tree_lines);
 
-    for (i = 0; i < tree_lines; i++)
-	tree->tree_shown [i] = NULL;
     if (tree->store->tree_first)
 	topsublevel = tree->store->tree_first->sublevel;
     else

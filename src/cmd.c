@@ -45,16 +45,18 @@
 #include <grp.h>
 #include <sys/time.h>
 
-#include "global.h"
+#include "lib/global.h"
 
-#include "../src/tty/tty.h"		/* LINES, tty_touch_screen() */
-#include "../src/tty/key.h"		/* ALT() macro */
-#include "../src/tty/win.h"		/* do_enter_ca_mode() */
-
-#include "../src/mcconfig/mcconfig.h"
-#include "../src/search/search.h"
-#include "../src/viewer/mcviewer.h"
-#include "../src/filehighlight/fhl.h"	/* MC_FHL_INI_FILE */
+#include "lib/tty/tty.h"		/* LINES, tty_touch_screen() */
+#include "lib/tty/key.h"		/* ALT() macro */
+#include "lib/tty/win.h"		/* do_enter_ca_mode() */
+#include "lib/mcconfig.h"
+#include "lib/search.h"
+#include "src/viewer/mcviewer.h"
+#include "lib/filehighlight.h"	/* MC_FHL_INI_FILE */
+#include "lib/vfs/mc-vfs/vfs.h"
+#include "lib/fileloc.h"
+#include "lib/strutil.h"
 
 #include "cmd.h"		/* Our definitions */
 #include "fileopctx.h"
@@ -63,7 +65,7 @@
 #include "hotlist.h"		/* hotlist_cmd() */
 #include "tree.h"		/* tree_chdir() */
 #include "subshell.h"		/* use_subshell */
-#include "cons.saver.h"		/* console_flag */
+#include "consaver/cons.saver.h"		/* console_flag */
 #include "dialog.h"		/* Widget */
 #include "wtools.h"		/* message() */
 #include "main.h"		/* change_panel() */
@@ -77,17 +79,15 @@
 #include "setup.h"
 #include "execute.h"		/* toggle_panels() */
 #include "history.h"
-#include "strutil.h"
 #include "dir.h"
 #include "cmddef.h"		/* CK_InputHistoryShow */
-#include "fileloc.h"
 
 #ifndef MAP_FILE
 #   define MAP_FILE 0
 #endif
 
 #ifdef USE_INTERNAL_EDIT
-#   include "../edit/edit.h"
+#   include "src/editor/edit.h"
 #endif
 
 /* If set and you don't have subshell support,then C-o will give you a shell */
@@ -726,7 +726,7 @@ void quick_chdir_cmd (void)
     g_free (target);
 }
 
-#ifdef USE_VFS
+#ifdef ENABLE_VFS
 void reselect_vfs (void)
 {
     char *target;
@@ -739,7 +739,7 @@ void reselect_vfs (void)
         message (D_ERROR, MSG_ERROR, _("Cannot change directory") );
     g_free (target);
 }
-#endif /* USE_VFS */
+#endif /* ENABLE_VFS */
 
 static int compare_files (char *name1, char *name2, off_t size)
 {
@@ -872,8 +872,8 @@ compare_dirs_cmd (void)
 
     if (choice < 0 || choice > 2)
 	return;
-    else
-	thorough_flag = choice;
+
+    thorough_flag = choice;
 
     if (get_current_type () == view_listing
 	&& get_other_type () == view_listing) {
@@ -1028,38 +1028,6 @@ user_file_menu_cmd (void)
     user_menu_cmd (NULL);
 }
 
-/* partly taken from dcigettext.c, returns "" for default locale */
-/* value should be freed by calling function g_free() */
-char *guess_message_value (void)
-{
-    static const char * const var[] = {
-	/* Setting of LC_ALL overwrites all other.  */
-	/* Do not use LANGUAGE for check user locale and drowing hints */
-	"LC_ALL",
-	/* Next comes the name of the desired category.  */
-	"LC_MESSAGES",
-        /* Last possibility is the LANG environment variable.  */
-	"LANG",
-	/* NULL exit loops */
-	NULL
-    };
-
-    unsigned i = 0;
-    const char *locale = NULL;
-
-    while (var[i] != NULL) {
-	locale = getenv (var[i]);
-	if (locale != NULL && locale[0] != '\0')
-	    break;
-	i++;
-    }
-
-    if (locale == NULL)
-	locale = "";
-
-    return g_strdup (locale);
-}
-
 /*
  * Return a random hint.  If force is not 0, ignore the timeout.
  */
@@ -1080,7 +1048,7 @@ get_random_hint (int force)
 	return g_strdup ("");
     last_sec = tv.tv_sec;
 
-    data = load_mc_home_file (MC_HINT, NULL);
+    data = load_mc_home_file (mc_home, mc_home_alt, MC_HINT, NULL);
     if (!data)
 	return 0;
 
@@ -1174,14 +1142,14 @@ void fishlink_cmd (void)
 	     "/#sh:", 1);
 }
 
-#ifdef WITH_SMBFS
+#ifdef ENABLE_VFS_SMB
 void smblink_cmd (void)
 {
     nice_cd (_(" SMB link to machine "), _(machine_str),
 	     "[SMB File System]", ":smblink_cmd: SMB link to machine ",
 	     "/#smb:", 0);
 }
-#endif /* WITH_SMBFS */
+#endif /* ENABLE_VFS_SMB */
 #endif /* USE_NETCODE */
 
 #ifdef USE_EXT2FSLIB
@@ -1314,21 +1282,20 @@ save_setup_cmd (void)
 }
 
 static void
-configure_panel_listing (WPanel *p, int view_type, int use_msformat, char *user, char *status)
+configure_panel_listing (WPanel *p, int list_type, int use_msformat, char *user, char *status)
 {
     p->user_mini_status = use_msformat;
-    p->list_type = view_type;
+    p->list_type = list_type;
 
-    if (view_type == list_user || use_msformat){
+    if (list_type == list_user || use_msformat) {
 	g_free (p->user_format);
 	p->user_format = user;
 
-	g_free (p->user_status_format [view_type]);
-	p->user_status_format [view_type] = status;
+	g_free (p->user_status_format [list_type]);
+	p->user_status_format [list_type] = status;
 
 	set_panel_formats (p);
-    }
-    else {
+    } else {
         g_free (user);
         g_free (status);
     }
@@ -1369,27 +1336,21 @@ switch_to_listing (int panel_index)
 void
 listing_cmd (void)
 {
-    int   view_type, use_msformat;
+    int list_type;
+    int use_msformat;
     char  *user, *status;
-    WPanel *p;
-    int   display_type;
+    WPanel *p = NULL;
 
-    display_type = get_display_type (MENU_PANEL_IDX);
-    if (display_type == view_listing)
+    if (get_display_type (MENU_PANEL_IDX) == view_listing)
 	p = MENU_PANEL_IDX == 0 ? left_panel : right_panel;
-    else
-	p = 0;
 
-    view_type = display_box (p, &user, &status, &use_msformat, MENU_PANEL_IDX);
+    list_type = display_box (p, &user, &status, &use_msformat, MENU_PANEL_IDX);
 
-    if (view_type == -1)
-	return;
-
-    switch_to_listing (MENU_PANEL_IDX);
-
-    p = MENU_PANEL_IDX == 0 ? left_panel : right_panel;
-
-    configure_panel_listing (p, view_type, use_msformat, user, status);
+    if (list_type != -1) {
+	switch_to_listing (MENU_PANEL_IDX);
+	p = MENU_PANEL_IDX == 0 ? left_panel : right_panel;
+	configure_panel_listing (p, list_type, use_msformat, user, status);
+    }
 }
 
 void
@@ -1413,18 +1374,21 @@ quick_view_cmd (void)
 }
 
 /* Handle the tree internal listing modes switching */
-static int
+static gboolean
 set_basic_panel_listing_to (int panel_index, int listing_mode)
 {
     WPanel *p = (WPanel *) get_panel_widget (panel_index);
+    gboolean ok;
 
     switch_to_listing (panel_index);
     p->list_type = listing_mode;
-    if (set_panel_formats (p))
-	return 0;
 
-    do_refresh ();
-    return 1;
+    ok = set_panel_formats (p) == 0;
+
+    if (ok)
+	do_refresh ();
+
+    return ok;
 }
 
 void

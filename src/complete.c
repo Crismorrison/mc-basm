@@ -36,18 +36,18 @@
 #include <pwd.h>
 #include <unistd.h>
 
-#include "global.h"
+#include "lib/global.h"
 
-#include "../src/tty/tty.h"
-#include "../src/tty/key.h"		/* XCTRL and ALT macros */
+#include "lib/tty/tty.h"
+#include "lib/tty/key.h"		/* XCTRL and ALT macros */
+#include "lib/vfs/mc-vfs/vfs.h"
+#include "lib/strescape.h"
+#include "lib/strutil.h"
 
 #include "dialog.h"
 #include "widget.h"
 #include "wtools.h"
 #include "main.h"		/* show_all_if_ambiguous */
-#include "util.h"
-#include "../src/strescape.h"
-#include "strutil.h"
 
 typedef char *CompletionFunction (const char * text, int state, INPUT_COMPLETE_FLAGS flags);
 
@@ -866,16 +866,17 @@ static WInput *input;
 static int min_end;
 static int start, end;
 
-static int insert_text (WInput *in, char *text, ssize_t size)
+static int
+insert_text (WInput *in, char *text, ssize_t size)
 {
     int buff_len = str_length (in->buffer);
-    
+
     size = min (size, (ssize_t) strlen (text)) + start - end;
     if (strlen (in->buffer) + size >= (size_t) in->current_max_size){
     /* Expand the buffer */
-    	char *narea = g_realloc (in->buffer, in->current_max_size 
-                + size + in->field_width);
-	if (narea){
+	char *narea = g_try_realloc (in->buffer, in->current_max_size
+					+ size + in->field_width);
+	if (narea != NULL) {
 	    in->buffer = narea;
 	    in->current_max_size += size + in->field_width;
 	}
@@ -921,24 +922,23 @@ query_callback (Dlg_head *h, Widget *sender,
 	    if (end == min_end) {
 		h->ret_value = 0;
 		dlg_stop (h);
-		return MSG_HANDLED;
 	    } else {
-		WLEntry *e, *e1;
+		int i;
+		GList *e;
 
-		e1 = e = ((WListbox *) (h->current))->list;
-		do {
-		    if (!strncmp (input->buffer + start, 
-                         e1->text, end - start - 1)) {
-                                 
-			listbox_select_entry ((WListbox *) (h->current), e1);
-			end = str_get_prev_char (&(input->buffer[end])) 
-                                - input->buffer;
+		for (i = 0, e = ((WListbox *) h->current)->list;
+			e != NULL;
+			i++, e = g_list_next (e)) {
+		    WLEntry *le = (WLEntry *) e->data;
+
+		    if (strncmp (input->buffer + start, le->text, end - start - 1) == 0) {
+			listbox_select_entry ((WListbox *) h->current, i);
+			end = str_get_prev_char (&(input->buffer[end])) - input->buffer;
 			handle_char (input, parm);
 			send_message (h->current, WIDGET_DRAW, 0);
 			break;
 		    }
-		    e1 = e1->next;
-		} while (e != e1);
+		}
 	    }
 	    return MSG_HANDLED;
 
@@ -955,7 +955,8 @@ query_callback (Dlg_head *h, Widget *sender,
 		} else
 		    return MSG_NOT_HANDLED;
 	    } else {
-		WLEntry *e, *e1;
+		GList *e;
+		int i;
 		int need_redraw = 0;
 		int low = 4096;
 		char *last_text = NULL;
@@ -964,52 +965,53 @@ query_callback (Dlg_head *h, Widget *sender,
                 bl++;
                 buff[bl] = '\0';
                 switch (str_is_valid_char (buff, bl)) {
-                    case -1: 
+                    case -1:
                         bl = 0;
                     case -2:
                         return MSG_HANDLED;
                 }
-                
-		e1 = e = ((WListbox *) (h->current))->list;
-		do {
-		    if (!strncmp (input->buffer + start, 
-                         e1->text, end - start)) {
-			
-                        if (strncmp (&e1->text[end - start], buff, bl) == 0) {
+
+		for (i = 0, e = ((WListbox *) h->current)->list;
+			e != NULL;
+			i++, e = g_list_next (e)) {
+		    WLEntry *le = (WLEntry *) e->data;
+
+		    if (strncmp (input->buffer + start, le->text, end - start) == 0) {
+                        if (strncmp (&le->text[end - start], buff, bl) == 0) {
 			    if (need_redraw) {
 				char *si, *sl;
-				char *ni, *nl;
-                                si = &(e1->text[end - start]);
-                                sl = &(last_text[end - start]);
-                                
-				for (; si[0] != '\0' && sl[0] != '\0';) {
-                                    
-                                    ni = str_get_next_char (si);
-                                    nl = str_get_next_char (sl);
-                                    
-                                    if (ni - si != nl - sl) break;
-                                    if (strncmp (si, sl, ni - si) != 0) break;
-                                    
-                                    si = ni;
-                                    sl = nl;
-                                }
-                                
-				if (low > si - &e1->text[end - start])
-				    low = si - &e1->text[end - start];
+				char *nexti, *nextl;
 
-				last_text = e1->text;
+                                si = &(le->text[end - start]);
+                                sl = &(last_text[end - start]);
+
+                                for (; si[0] != '\0' && sl[0] != '\0';) {
+                                    nexti = str_get_next_char (si);
+                                    nextl = str_get_next_char (sl);
+
+                                    if (nexti - si != nextl - sl)
+                                        break;
+                                    if (strncmp (si, sl, nexti - si) != 0)
+                                        break;
+
+                                    si = nexti;
+                                    sl = nextl;
+                                }
+
+				if (low > si - &le->text[end - start])
+				    low = si - &le->text[end - start];
+
+				last_text = le->text;
 				need_redraw = 2;
 			    } else {
 				need_redraw = 1;
-				listbox_select_entry ((WListbox *) (h->
-								    current),
-						      e1);
-				last_text = e1->text;
+				listbox_select_entry ((WListbox *) h->current, i);
+				last_text = le->text;
 			    }
 			}
 		    }
-		    e1 = e1->next;
-		} while (e != e1);
+		}
+
 		if (need_redraw == 2) {
 		    insert_text (input, last_text, low);
 		    send_message (h->current, WIDGET_DRAW, 0);
@@ -1104,10 +1106,10 @@ complete_engine (WInput *in, int what_to_do)
 	    query_dlg = create_dlg (y, x, query_height, query_width,
 				    dialog_colors, query_callback,
 				    "[Completion]", NULL, DLG_COMPACT);
-	    query_list = listbox_new (1, 1, h - 2, w - 2, NULL);
+	    query_list = listbox_new (1, 1, h - 2, w - 2, FALSE, NULL);
 	    add_widget (query_dlg, query_list);
 	    for (p = in->completions + 1; *p; p++)
-		listbox_add_item (query_list, 0, 0, *p, NULL);
+		listbox_add_item (query_list, LISTBOX_APPEND_AT_END, 0, *p, NULL);
 	    run_dlg (query_dlg);
 	    q = NULL;
 	    if (query_dlg->ret_value == B_ENTER){

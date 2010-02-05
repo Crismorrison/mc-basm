@@ -22,6 +22,7 @@ AC_PROG_LIBTOOL
 AC_ISC_POSIX
 
 AC_PROG_CC_STDC
+AM_PROG_CC_C_O
 
 dnl Doxygen
 
@@ -48,9 +49,9 @@ AC_ARG_WITH([glib_static],
 
 glib_found=no
 
-PKG_CHECK_MODULES(GLIB, [glib-2.0 >= 2.6], [glib_found=yes], [:])
+PKG_CHECK_MODULES(GLIB, [glib-2.0 >= 2.8], [glib_found=yes], [:])
 if test x"$glib_found" = xno; then
-    AC_MSG_ERROR([glib-2.0 not found or version too old (must be >= 2.6)])
+    AC_MSG_ERROR([glib-2.0 not found or version too old (must be >= 2.8)])
 fi
 
 PKG_CHECK_MODULES(GMODULE, [gmodule-2.0], [gmodule_found=yes])
@@ -140,14 +141,13 @@ if test x"$enable_extcharset" = x"yes"; then
 fi
 
 AC_PROG_INSTALL
-AC_CHECK_HEADERS([unistd.h string.h memory.h grp.h limits.h malloc.h \
-	stdlib.h termios.h utime.h fcntl.h pwd.h sys/statfs.h sys/vfs.h sys/time.h \
+AC_CHECK_HEADERS([unistd.h string.h memory.h limits.h malloc.h \
+	utime.h fcntl.h sys/statfs.h sys/vfs.h sys/time.h \
 	sys/timeb.h sys/select.h sys/ioctl.h stropts.h arpa/inet.h \
 	security/pam_misc.h sys/socket.h sys/sysmacros.h sys/types.h \
 	sys/mkdev.h wchar.h wctype.h])
 
 AC_HEADER_TIME
-AC_HEADER_SYS_WAIT
 AC_HEADER_DIRENT
 AC_HEADER_STDC
 
@@ -162,11 +162,9 @@ dnl
 AC_CHECK_FUNCS([\
 	atoll \
 	cfgetospeed \
-	getegid geteuid getgid getsid getuid \
 	initgroups isascii \
 	memcpy memset \
-	putenv \
-	setreuid setuid statfs strerror sysconf \
+	setreuid statfs sysconf \
 	tcgetattr tcsetattr truncate \
 ])
 
@@ -303,7 +301,7 @@ have to use that instead of gettimeofday])])
 AC_MC_VFS_CHECKS
 
 vfs_type="normal"
-if test x$use_vfs = xyes; then
+if test x$enable_vfs = xyes; then
 	AC_MSG_NOTICE([enabling VFS code])
 	vfs_type="Midnight Commander Virtual File System"
 fi
@@ -517,7 +515,11 @@ fi
 
 MC_CHECK_CFLAGS
 
-CFLAGS_OPTS=" -O2 "
+CFLAGS_OPTS=""
+
+if test "x$CFLAGS" = "x"; then
+    CFLAGS_OPTS=" -O2 "
+fi
 
 if test x$USE_MAINTAINER_MODE = xyes; then
     CFLAGS_OPTS="-g3 -O -ggdb"
@@ -532,8 +534,7 @@ AC_ARG_ENABLE(
 if test "x$enable_werror" = xyes; then
     MC_CHECK_ONE_CFLAG([-Werror])
 fi
-
-CFLAGS="$CFLAGS $mc_configured_cflags $CFLAGS_OPTS"
+CFLAGS="$mc_configured_cflags $CFLAGS_OPTS $CFLAGS"
 
 AC_SUBST(CFLAGS)
 AC_SUBST(CPPFLAGS)
@@ -543,19 +544,14 @@ AC_SUBST(LIBS)
 dnl Libraries used only when building the mc binary
 AC_SUBST(MCLIBS)
 
-dnl Version for the RedHat package, without dashes
-RPM_VERSION=`echo $VERSION | sed 's/-/./g'`
-AC_SUBST(RPM_VERSION)
-
 if test -n "$use_smbfs"; then
-  AC_CONFIG_SUBDIRS([vfs/samba])
+  AC_CONFIG_SUBDIRS([lib/vfs/mc-vfs/samba])
 fi
 
 AM_CONDITIONAL(USE_MAINTAINER_MODE, [test x"$USE_MAINTAINER_MODE" = xyes])
 AM_CONDITIONAL(USE_SCREEN_SLANG, [test x"$with_screen" = xslang])
 AM_CONDITIONAL(USE_EDIT, [test -n "$use_edit"])
-AM_CONDITIONAL(USE_VFS, [test "x$use_vfs" = xyes])
-AM_CONDITIONAL(USE_VFS_NET, [test x"$use_net_code" = xtrue])
+AM_CONDITIONAL(ENABLE_VFS_NET, [test x"$use_net_code" = xtrue])
 AM_CONDITIONAL(USE_SAMBA_FS, [test -n "$use_smbfs"])
 AM_CONDITIONAL(ENABLE_MCSERVER, [test x"$enable_mcserver" = "xyes"])
 AM_CONDITIONAL(CHARSET, [test -n "$have_charset"])
@@ -579,42 +575,47 @@ misc/skins/Makefile
 misc/mc.ext
 
 src/Makefile
-src/filehighlight/Makefile
-src/mcconfig/Makefile
-src/search/Makefile
-src/skin/Makefile
-src/tty/Makefile
+src/consaver/Makefile
+src/editor/Makefile
 src/viewer/Makefile
 
-edit/Makefile
-syntax/Makefile
+lib/Makefile
+lib/filehighlight/Makefile
+lib/mcconfig/Makefile
+lib/search/Makefile
+lib/skin/Makefile
+lib/strutil/Makefile
+lib/tty/Makefile
+lib/vfs/Makefile
+lib/vfs/mc-vfs/Makefile
+lib/vfs/mc-vfs/extfs/Makefile
+lib/vfs/mc-vfs/extfs/a
+lib/vfs/mc-vfs/extfs/apt
+lib/vfs/mc-vfs/extfs/audio
+lib/vfs/mc-vfs/extfs/deb
+lib/vfs/mc-vfs/extfs/deba
+lib/vfs/mc-vfs/extfs/debd
+lib/vfs/mc-vfs/extfs/dpkg
+lib/vfs/mc-vfs/extfs/iso9660
+lib/vfs/mc-vfs/extfs/hp48
+lib/vfs/mc-vfs/extfs/lslR
+lib/vfs/mc-vfs/extfs/mailfs
+lib/vfs/mc-vfs/extfs/patchfs
+lib/vfs/mc-vfs/extfs/rpms
+lib/vfs/mc-vfs/extfs/s3
+lib/vfs/mc-vfs/extfs/uace
+lib/vfs/mc-vfs/extfs/ualz
+lib/vfs/mc-vfs/extfs/uar
+lib/vfs/mc-vfs/extfs/uarc
+lib/vfs/mc-vfs/extfs/uarj
+lib/vfs/mc-vfs/extfs/uc1541
+lib/vfs/mc-vfs/extfs/uha
+lib/vfs/mc-vfs/extfs/ulha
+lib/vfs/mc-vfs/extfs/urar
+lib/vfs/mc-vfs/extfs/uzip
+lib/vfs/mc-vfs/extfs/uzoo
 
-vfs/Makefile
-vfs/extfs/Makefile
-vfs/extfs/a
-vfs/extfs/apt
-vfs/extfs/audio
-vfs/extfs/deb
-vfs/extfs/deba
-vfs/extfs/debd
-vfs/extfs/dpkg
-vfs/extfs/iso9660
-vfs/extfs/hp48
-vfs/extfs/lslR
-vfs/extfs/mailfs
-vfs/extfs/patchfs
-vfs/extfs/rpms
-vfs/extfs/uace
-vfs/extfs/ualz
-vfs/extfs/uar
-vfs/extfs/uarc
-vfs/extfs/uarj
-vfs/extfs/uc1541
-vfs/extfs/uha
-vfs/extfs/ulha
-vfs/extfs/urar
-vfs/extfs/uzip
-vfs/extfs/uzoo
+misc/syntax/Makefile
 
 doc/Makefile
 doc/hints/Makefile
@@ -639,6 +640,10 @@ po/Makefile.in
 ])
 
 AC_OUTPUT
+
+if test x$enable_mcserver = x; then
+    enable_mcserver='no'
+fi
 
 echo "
 Configuration:

@@ -41,20 +41,18 @@
 #ifdef HAVE_SYS_IOCTL_H
 #   include <sys/ioctl.h>
 #endif
-#ifdef HAVE_TERMIOS_H
 #include <termios.h>
-#endif
 #include <unistd.h>
 
-#include "global.h"
-
-#include "../src/tty/tty.h"
-#include "../src/skin/skin.h"
-#include "../src/tty/key.h"
-#include "../src/tty/mouse.h"
-#include "../src/tty/win.h"	/* do_enter_ca_mode() */
-
-#include "../src/mcconfig/mcconfig.h"
+#include "lib/global.h"
+#include "lib/tty/tty.h"
+#include "lib/skin.h"
+#include "lib/tty/key.h"
+#include "lib/tty/mouse.h"
+#include "lib/tty/win.h"	/* do_enter_ca_mode() */
+#include "lib/mcconfig.h"
+#include "lib/vfs/mc-vfs/vfs.h"		/* For vfs_translate_url() */
+#include "lib/strutil.h"
 
 #include "dialog.h"
 #include "widget.h"
@@ -64,18 +62,16 @@
 #include "subshell.h"	/* For use_subshell and resize_subshell() */
 #include "tree.h"
 #include "menu.h"
-#include "strutil.h"
 #include "background.h"         /* we_are_background */
 /* Needed for the extern declarations of integer parameters */
 #include "dir.h"
 #include "panel.h"		/* The Panel widget */
-#include "cons.saver.h"
+#include "consaver/cons.saver.h"
 #include "layout.h"
 #include "info.h"		/* The Info widget */
-#include "../src/viewer/mcviewer.h"     /* The view widget */
+#include "src/viewer/mcviewer.h"     /* The view widget */
 
 #include "setup.h"		/* For save_setup() */
-#include "../vfs/vfs.h"		/* For vfs_translate_url() */
 
 /* Controls the display of the rotating dash on the verbose mode */
 int nice_rotating_dash = 1;
@@ -119,7 +115,7 @@ int output_start_y = 0;
 #define MAX_VIEWS 2
 
 static struct {
-    int    type;
+    panel_view_mode_t type;
     Widget *widget;
     char *last_saved_dir;  /* last view_list working directory */
 } panels [MAX_VIEWS] = {
@@ -197,9 +193,6 @@ static gsize first_width, second_width;
 static const char *output_lines_label;
 
 static WButton *bleft_widget, *bright_widget;
-
-/* Declarations for static functions */
-static void low_level_change_screen_size (void);
 
 static void _check_split (void)
 {
@@ -516,7 +509,7 @@ init_layout (void)
     radio_widget->sel = horizontal_split;
 }
 
-static void
+void
 layout_change (void)
 {
     setup_panels ();
@@ -608,13 +601,12 @@ mc_refresh (void)
 }
 
 static void
-panel_do_cols (int lc_index)
+panel_do_cols (int idx)
 {
-    if (get_display_type (lc_index) == view_listing)
-	set_panel_formats ((WPanel *) panels [lc_index].widget);
-    else {
-	panel_update_cols (panels [lc_index].widget, frame_half);
-    }
+    if (get_display_type (idx) == view_listing)
+	set_panel_formats ((WPanel *) panels [idx].widget);
+    else
+	panel_update_cols (panels [idx].widget, frame_half);
 }
 
 void
@@ -661,7 +653,7 @@ setup_panels (void)
     panel_do_cols (0);
     panel_do_cols (1);
 
-    promptl = str_term_width1 (prompt);
+    promptl = str_term_width1 (mc_prompt);
 
     widget_set_size (&the_menubar->widget, 0, 0, 1, COLS);
 
@@ -696,17 +688,7 @@ setup_panels (void)
     update_xterm_title_path ();
 }
 
-void
-sigwinch_handler (int dummy)
-{
-    (void) dummy;
-#if !(defined(USE_NCURSES) || defined(USE_NCURSESW))	/* don't do malloc in a signal handler */
-    low_level_change_screen_size ();
-#endif
-    winch_flag = 1;
-}
-
-static void
+static inline void
 low_level_change_screen_size (void)
 {
 #if defined(HAVE_SLANG) || NCURSES_VERSION_MAJOR >= 4
@@ -730,6 +712,16 @@ low_level_change_screen_size (void)
     }
 #endif /* TIOCGWINSZ */
 #endif /* defined(HAVE_SLANG) || NCURSES_VERSION_MAJOR >= 4 */
+}
+
+void
+sigwinch_handler (int dummy)
+{
+    (void) dummy;
+#if !(defined(USE_NCURSES) || defined(USE_NCURSESW))	/* don't do malloc in a signal handler */
+    low_level_change_screen_size ();
+#endif
+    winch_flag = 1;
 }
 
 void
@@ -758,7 +750,6 @@ change_screen_size (void)
     tty_keypad (TRUE);
     tty_nodelay (FALSE);
 #endif
-    setup_panels ();
 
     /* Inform all running dialogs */
     d = current_dlg;
@@ -766,10 +757,6 @@ change_screen_size (void)
 	(*d->callback) (d, NULL, DLG_RESIZE, 0, NULL);
 	d = d->parent;
     }
-
-#ifdef RESIZABLE_MENUBAR
-    menubar_arrange (the_menubar);
-#endif
 
     /* Now, force the redraw */
     repaint_screen ();
@@ -800,7 +787,6 @@ void print_vfs_message (const char *msg, ...)
     char str [128];
 
     va_start (ap, msg);
-
     g_vsnprintf (str, sizeof (str), msg, ap);
     va_end (ap);
 
@@ -874,7 +860,7 @@ const char *get_nth_panel_name (int num)
 /* This routine also keeps at least one WPanel object in the screen */
 /* since a lot of routines depend on the current_panel variable */
 void
-set_display_type (int num, int type)
+set_display_type (int num, panel_view_mode_t type)
 {
     int x = 0, y = 0, cols = 0, lines = 0;
     int the_other = 0;		/* Index to the other panel */
@@ -887,7 +873,7 @@ set_display_type (int num, int type)
 	abort ();
     }
     /* Check that we will have a WPanel * at least */
-    if (type != view_listing){
+    if (type != view_listing) {
 	the_other = num == 0 ? 1 : 0;
 
 	if (panels [the_other].type != view_listing)
@@ -895,7 +881,7 @@ set_display_type (int num, int type)
     }
 
     /* Get rid of it */
-    if (panels [num].widget){
+    if (panels [num].widget) {
 	Widget *w = panels [num].widget;
 	WPanel *panel = (WPanel *) panels [num].widget;
 
@@ -905,8 +891,8 @@ set_display_type (int num, int type)
 	lines = w->lines;
 	old_widget = panels [num].widget;
 
-	if (panels [num].type == view_listing){
-	    if (panel->frame_size == frame_full && type != view_listing){
+	if (panels [num].type == view_listing) {
+	    if (panel->frame_size == frame_full && type != view_listing) {
 		cols = COLS - first_panel_size;
 		if (num == 1)
 		    x = first_panel_size;
@@ -917,14 +903,15 @@ set_display_type (int num, int type)
     /* Restoring saved path from panels.ini for nonlist panel */
     /* when it's first creation (for example view_info) */
     if (old_widget == NULL && type != view_listing) {
-	char panel_dir[MC_MAXPATHLEN];
+	char panel_dir [MC_MAXPATHLEN];
 	mc_get_current_wd (panel_dir, sizeof (panel_dir));
 	panels[num].last_saved_dir = g_strdup (panel_dir);
     }
 
-    switch (type){
+    switch (type) {
+    case view_nothing:
     case view_listing:
-	new_widget = restore_into_right_dir_panel(num, old_widget);
+	new_widget = restore_into_right_dir_panel (num, old_widget);
 	break;
 	
     case view_info:
@@ -939,8 +926,7 @@ set_display_type (int num, int type)
 	new_widget = (Widget *) mcview_new (0, 0, 0, 0, 1);
 	the_other_panel = (WPanel *) panels [the_other].widget;
 	if (the_other_panel)
-	    file_name =
-		the_other_panel->dir.list[the_other_panel->selected].fname;
+	    file_name = the_other_panel->dir.list[the_other_panel->selected].fname;
 	else
 	    file_name = "";
 	
@@ -951,7 +937,7 @@ set_display_type (int num, int type)
     if (type != view_listing)
 	/* Must save dir, for restoring after change type to */
 	/* view_listing */
-	save_panel_dir(num);
+	save_panel_dir (num);
 
     panels [num].type = type;
     panels [num].widget = new_widget;
@@ -961,10 +947,10 @@ set_display_type (int num, int type)
 
     /* We use replace to keep the circular list of the dialog in the */
     /* same state.  Maybe we could just kill it and then replace it  */
-    if (midnight_dlg && old_widget){
+    if ((midnight_dlg != NULL) && (old_widget != NULL))
 	dlg_replace_widget (old_widget, panels [num].widget);
-    }
-    if (type == view_listing){
+
+    if (type == view_listing) {
 	if (num == 0)
 	    left_panel = (WPanel *) new_widget;
 	else
@@ -983,8 +969,8 @@ set_display_type (int num, int type)
      *   current_panel causes segfault, e.g. C-Enter, C-x c, ...
      */
 
-    if (type != view_listing)
-	if (current_panel == (WPanel *) old_widget)
+    if ((type != view_listing)
+	&& (current_panel == (WPanel *) old_widget))
 	    current_panel = num == 0 ? right_panel : left_panel;
 }
 
@@ -998,7 +984,7 @@ void swap_panels ()
     WPanel panel;
     WPanel *panel1, *panel2;
     int tmp_type;
-    
+
 #define panelswap(x) panel. x = panel1-> x; panel1-> x = panel2-> x; panel2-> x = panel. x;
 
 #define panelswapstr(e) strcpy (panel. e, panel1-> e); \
@@ -1020,7 +1006,7 @@ void swap_panels ()
         panelswap (selected);
         panelswap (is_panelized);
         panelswap (dir_stat);
-	
+
         panel1->searching = 0;
         panel2->searching = 0;
         if (current_panel == panel1)
@@ -1035,9 +1021,9 @@ void swap_panels ()
     } else {
 	WPanel *tmp_panel;
 	
-	tmp_panel=right_panel;
-	right_panel=left_panel;
-	left_panel=tmp_panel;
+	tmp_panel = right_panel;
+	right_panel = left_panel;
+	left_panel = tmp_panel;
 	
 	if (panels [0].type == view_listing) {
             if (!strcmp (panel1->panel_name, get_nth_panel_name (0))) {
@@ -1051,7 +1037,7 @@ void swap_panels ()
                 panel2->panel_name = g_strdup (get_nth_panel_name (0));
             }
         }
-        
+
         tmp.x = panels [0].widget->x;
         tmp.y = panels [0].widget->y;
         tmp.cols = panels [0].widget->cols;
@@ -1066,7 +1052,7 @@ void swap_panels ()
         panels [1].widget->y = tmp.y;
         panels [1].widget->cols = tmp.cols;
         panels [1].widget->lines = tmp.lines;
-        
+
         tmp_widget = panels [0].widget;
         panels [0].widget = panels [1].widget;
         panels [1].widget = tmp_widget;
@@ -1076,15 +1062,16 @@ void swap_panels ()
     }
 }
 
-int get_display_type (int lc_index)
+panel_view_mode_t
+get_display_type (int idx)
 {
-    return panels [lc_index].type;
+    return panels [idx].type;
 }
 
 struct Widget *
-get_panel_widget (int lc_index)
+get_panel_widget (int idx)
 {
-    return panels[lc_index].widget;
+    return panels[idx].widget;
 }
 
 int get_current_index (void)
@@ -1107,7 +1094,8 @@ get_other_panel (void)
 }
 
 /* Returns the view type for the current panel/view */
-int get_current_type (void)
+panel_view_mode_t
+get_current_type (void)
 {
     if (panels [0].widget == (Widget *) current_panel)
 	return panels [0].type;
@@ -1116,7 +1104,8 @@ int get_current_type (void)
 }
 
 /* Returns the view type of the unselected panel */
-int get_other_type (void)
+panel_view_mode_t
+get_other_type (void)
 {
     if (panels [0].widget == (Widget *) current_panel)
 	return panels [1].type;
@@ -1126,30 +1115,30 @@ int get_other_type (void)
 
 /* Save current list_view widget directory into panel */
 void
-save_panel_dir (int lc_index)
+save_panel_dir (int idx)
 {
-    int type = get_display_type (lc_index);
-    Widget *widget = get_panel_widget (lc_index);
+    panel_view_mode_t type = get_display_type (idx);
+    Widget *widget = get_panel_widget (idx);
 
     if ((type == view_listing) && (widget != NULL)) {
 	WPanel *w = (WPanel *) widget;
 	char *widget_work_dir = w->cwd;
 
-	g_free(panels [lc_index].last_saved_dir);  /* last path no needed */
+	g_free(panels [idx].last_saved_dir);  /* last path no needed */
         /* Because path can be nonlocal */
-	panels [lc_index].last_saved_dir = vfs_translate_url(widget_work_dir);
+	panels [idx].last_saved_dir = vfs_translate_url (widget_work_dir);
     }
 }
 
 /* Save current list_view widget directory into panel */
 Widget *
-restore_into_right_dir_panel (int lc_index, Widget *from_widget)
+restore_into_right_dir_panel (int idx, Widget *from_widget)
 {
-    Widget *new_widget = 0;
-    const char *saved_dir = panels [lc_index].last_saved_dir;
+    Widget *new_widget = NULL;
+    const char *saved_dir = panels [idx].last_saved_dir;
     gboolean last_was_panel = (from_widget &&
-				get_display_type(lc_index) != view_listing);
-    const char *p_name = get_nth_panel_name (lc_index);
+				get_display_type(idx) != view_listing);
+    const char *p_name = get_nth_panel_name (idx);
 
     if (last_was_panel)
 	new_widget = (Widget *) panel_new_with_dir (p_name, saved_dir);

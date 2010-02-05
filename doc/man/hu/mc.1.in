@@ -1215,17 +1215,17 @@ során el szeretnéd kerülni a CDROM\-ot, vagy az NFS könyvtárait amelyeket
 slow linkkel csatoltak).
 .PP
 Az átlépendő könyvtárakat a
-.B find_ignore_dirs
+.B ignore_dirs
 változó állítja be az ~/.mc/ini fájlod
-.B Misc
+.B FindFile
 részében.
 .PP
 A könyvtár elemeket kettősponttal tudod elválasztani egymástól, emire
 itt egy példát is láthatsz:
 .PP
 .nf
-[Misc]
-find_ignore_dirs=/cdrom:/nfs/wuarchive:/afs
+[FindFile]
+ignore_dirs=/cdrom:/nfs/wuarchive:/afs
 .fi
 .PP
 A
@@ -1363,7 +1363,7 @@ nem talál ilyen fájlt, az
 keresése a következő lépés, egyébként pedig az mc az alapértelmezett
 rendszerszintű menüt használja, pl.:
 .IR @prefix@/share/mc/mc.menu ,
-esetleg /etc/mc/mc.menu.
+esetleg @sysconfdir@/mc/mc.menu.
 .PP
 A menü fájl formátuma nagyon egyszerű. A sorok, amelyek bármivel
 kezdődhetnek, de a space, vagy a tab megkülönböztetett menübejegyzések

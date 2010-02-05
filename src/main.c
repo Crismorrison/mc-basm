@@ -39,18 +39,31 @@
 #include <unistd.h>
 #include <pwd.h>		/* for username in xterm title */
 
-#include "global.h"
+#include "lib/global.h"
 
-#include "../src/tty/tty.h"
-#include "../src/skin/skin.h"
-#include "../src/tty/mouse.h"
-#include "../src/tty/key.h"		/* For init_key() */
-#include "../src/tty/win.h"		/* xterm_flag */
+#include "lib/tty/tty.h"
+#include "lib/skin.h"
+#include "lib/tty/mouse.h"
+#include "lib/tty/key.h"		/* For init_key() */
+#include "lib/tty/win.h"		/* xterm_flag */
 
-#include "../src/mcconfig/mcconfig.h"
-#include "../src/args.h"
-#include "../src/skin/skin.h"
-#include "../src/filehighlight/fhl.h"
+#include "lib/mcconfig.h"
+#include "lib/filehighlight.h"
+#include "lib/fileloc.h"		/* MC_USERCONF_DIR */
+
+#include "lib/vfs/mc-vfs/vfs.h"		/* vfs_translate_url() */
+
+#ifdef ENABLE_VFS_SMB
+#include "lib/vfs/mc-vfs/smbfs.h"	/* smbfs_set_debug() */
+#endif /* ENABLE_VFS_SMB */
+
+#ifdef ENABLE_VFS
+#include "lib/vfs/mc-vfs/gc.h"
+#endif
+
+#include "lib/strutil.h"
+
+#include "src/args.h"
 
 #include "dir.h"
 #include "dialog.h"
@@ -59,7 +72,7 @@
 #include "option.h"
 #include "tree.h"
 #include "treestore.h"
-#include "cons.saver.h"
+#include "consaver/cons.saver.h"
 #include "subshell.h"
 #include "setup.h"		/* save_setup() */
 #include "boxes.h"		/* sort_box() */
@@ -71,15 +84,12 @@
 #include "listmode.h"
 #include "execute.h"
 #include "ext.h"		/* For flush_extension_file() */
-#include "strutil.h"
 #include "widget.h"
 #include "command.h"
 #include "wtools.h"
 #include "cmddef.h"		/* CK_ cmd name const */
-#include "fileloc.h"		/* MC_USERCONF_DIR */
 #include "user.h"		/* user_file_menu_cmd() */
 
-#include "../vfs/vfs.h"		/* vfs_translate_url() */
 
 #include "chmod.h"
 #include "chown.h"
@@ -87,21 +97,15 @@
 
 #include "main.h"
 
-#ifdef WITH_SMBFS
-#include "../vfs/smbfs.h"	/* smbfs_set_debug() */
-#endif
 
 #ifdef USE_INTERNAL_EDIT
-#   include "../edit/edit.h"
+#   include "src/editor/edit.h"
 #endif
 
 #ifdef	HAVE_CHARSET
 #include "charsets.h"
 #endif				/* HAVE_CHARSET */
 
-#ifdef USE_VFS
-#include "../vfs/gc.h"
-#endif
 
 #include "keybind.h"		/* type global_keymap_t */
 
@@ -199,7 +203,7 @@ int navigate_with_arrows = 0;
 int reset_hp_softkeys = 0;
 
 /* The prompt */
-const char *prompt = NULL;
+const char *mc_prompt = NULL;
 
 /* The widget where we draw the prompt */
 WLabel *the_prompt;
@@ -233,6 +237,9 @@ int confirm_execute = 0;
 
 /* Asks for confirmation before leaving the program */
 int confirm_exit = 1;
+
+/* Asks for confirmation before clean up of history */
+int confirm_history_cleanup = 1;
 
 /* Asks for confirmation when using F3 to view a directory and there
    are tagged files */
@@ -560,19 +567,15 @@ directory_history_list (WPanel *panel)
 {
     char *s;
 
-    if (!panel->dir_history)
-	return;
+    s = show_hist (&panel->dir_history, &panel->widget);
 
-    s = show_hist (panel->dir_history, &panel->widget);
-
-    if (!s)
-	return;
-
-    if (_do_panel_cd (panel, s, cd_exact))
-	directory_history_add (panel, panel->cwd);
-    else
-	message (D_ERROR, MSG_ERROR, _("Cannot change directory"));
-    g_free (s);
+    if (s != NULL) {
+	if (_do_panel_cd (panel, s, cd_exact))
+	    directory_history_add (panel, panel->cwd);
+	else
+	    message (D_ERROR, MSG_ERROR, _("Cannot change directory"));
+	g_free (s);
+    }
 }
 
 #ifdef HAVE_SUBSHELL_SUPPORT
@@ -598,8 +601,8 @@ load_prompt (int fd, void *unused)
 	    tmp_prompt[COLS - 8] = '\0';
 	    prompt_len = COLS - 8;
 	}
-	prompt = tmp_prompt;
-	label_set_text (the_prompt, prompt);
+	mc_prompt = tmp_prompt;
+	label_set_text (the_prompt, mc_prompt);
 	winput_set_origin ((WInput *) cmdline, prompt_len,
 			   COLS - prompt_len);
 
@@ -692,9 +695,9 @@ create_panel_menu (void)
 #endif
     entries = g_list_append (entries, menu_entry_create (_("FT&P link..."),     CK_FtplinkCmd));
     entries = g_list_append (entries, menu_entry_create (_("S&hell link..."),   CK_FishlinkCmd));
-#ifdef WITH_SMBFS
+#ifdef ENABLE_VFS_SMB
     entries = g_list_append (entries, menu_entry_create (_("SM&B link..."),     CK_SmblinkCmd));
-#endif
+#endif /* ENABLE_VFS_SMB */
 #endif
     entries = g_list_append (entries, menu_separator_create ());
     entries = g_list_append (entries, menu_entry_create (_("&Rescan"),          CK_RereadCmd));
@@ -752,7 +755,7 @@ create_command_menu (void)
     entries = g_list_append (entries, menu_separator_create ());
     entries = g_list_append (entries, menu_entry_create (_("Command &history"),              CK_HistoryCmd));
     entries = g_list_append (entries, menu_entry_create (_("Di&rectory hotlist"),            CK_QuickChdirCmd));
-#ifdef USE_VFS
+#ifdef ENABLE_VFS
     entries = g_list_append (entries, menu_entry_create (_("&Active VFS list"),              CK_ReselectVfs));
 #endif
 #ifdef WITH_BACKGROUND
@@ -785,7 +788,7 @@ create_options_menu (void)
     entries = g_list_append (entries, menu_entry_create (_("C&onfirmation..."),  CK_ConfirmBox));
     entries = g_list_append (entries, menu_entry_create (_("&Display bits..."),  CK_DisplayBitsBox));
     entries = g_list_append (entries, menu_entry_create (_("Learn &keys..."),    CK_LearnKeys));
-#ifdef USE_VFS
+#ifdef ENABLE_VFS
     entries = g_list_append (entries, menu_entry_create (_("&Virtual FS..."),    CK_ConfigureVfs));
 #endif
     entries = g_list_append (entries, menu_separator_create ());
@@ -899,6 +902,14 @@ toggle_show_hidden (void)
     update_panels (UP_RELOAD, UP_KEEPSEL);
 }
 
+static void
+toggle_panels_split (void)
+{
+    horizontal_split = !horizontal_split;
+    layout_change ();
+    do_refresh();
+}
+
 void
 toggle_kilobyte_si (void)
 {
@@ -925,8 +936,7 @@ create_panels (void)
 {
     int current_index;
     int other_index;
-    int current_mode;
-    int other_mode;
+    panel_view_mode_t current_mode, other_mode;
     char original_dir[1024];
 
     original_dir[0] = 0;
@@ -974,7 +984,7 @@ create_panels (void)
 
     /* Create the nice widgets */
     cmdline = command_new (0, 0, 0);
-    the_prompt = label_new (0, 0, prompt);
+    the_prompt = label_new (0, 0, mc_prompt);
     the_prompt->transparent = 1;
     the_bar = buttonbar_new (keybar_visible);
 
@@ -1049,9 +1059,8 @@ copy_current_readlink (void)
 static void
 copy_other_readlink (void)
 {
-    if (get_other_type () != view_listing)
-	return;
-    copy_readlink (other_panel);
+    if (get_other_type () == view_listing)
+	copy_readlink (other_panel);
 }
 
 /* Insert the selected file name into the input line */
@@ -1100,9 +1109,8 @@ copy_current_tagged (void)
 static void
 copy_other_tagged (void)
 {
-    if (get_other_type () != view_listing)
-	return;
-    copy_tagged (other_panel);
+    if (get_other_type () == view_listing)
+	copy_tagged (other_panel);
 }
 
 void
@@ -1154,7 +1162,7 @@ midnight_execute_cmd (Widget *sender, unsigned long command)
     case CK_ConfigureBox:
         configure_box ();
         break;
-#ifdef USE_VFS
+#ifdef ENABLE_VFS
     case CK_ConfigureVfs:
         configure_vfs ();
         break;
@@ -1301,7 +1309,7 @@ midnight_execute_cmd (Widget *sender, unsigned long command)
     case CK_RereadCmd:
         reread_cmd ();
         break;
-#ifdef USE_VFS
+#ifdef ENABLE_VFS
     case CK_ReselectVfs:
         reselect_vfs ();
         break;
@@ -1321,11 +1329,11 @@ midnight_execute_cmd (Widget *sender, unsigned long command)
     case CK_SingleDirsizeCmd:
         smart_dirsize_cmd ();
         break;
-#if defined (USE_NETCODE) && defined (WITH_SMBFS)
+#if defined (USE_NETCODE) && defined (ENABLE_VFS_SMB)
     case CK_SmblinkCmd:
         smblink_cmd ();
         break;
-#endif
+#endif /* USE_NETCODE && ENABLE_VFS_SMB */
     case CK_Sort:
         sort_cmd ();
         break;
@@ -1346,6 +1354,9 @@ midnight_execute_cmd (Widget *sender, unsigned long command)
         break;
     case CK_ToggleShowHidden:
         toggle_show_hidden ();
+        break;
+    case CK_TogglePanelsSplit:
+        toggle_panels_split ();
         break;
     case CK_TreeCmd:
         tree_cmd ();
@@ -1508,8 +1519,6 @@ done_mc (void)
 {
     disable_mouse ();
 
-    done_menu ();
-
     /* Setup shutdown
      *
      * We sync the profiles since the hotlist may have changed, while
@@ -1550,6 +1559,11 @@ midnight_callback (Dlg_head *h, Widget *sender,
 	    show_console_contents (output_start_y,
 				   LINES - output_lines - keybar_visible -
 				   1, LINES - keybar_visible - 1);
+	return MSG_HANDLED;
+
+    case DLG_RESIZE:
+	setup_panels ();
+	menubar_arrange (the_menubar);
 	return MSG_HANDLED;
 
     case DLG_IDLE:
@@ -2015,15 +2029,15 @@ mc_main__setup_by_args (int argc, char *argv[])
 #ifdef USE_NETCODE
     if (mc_args__netfs_logfile != NULL) {
 	mc_setctl ("/#ftp:", VFS_SETCTL_LOGFILE, (void *) mc_args__netfs_logfile);
-#ifdef WITH_SMBFS
+#ifdef ENABLE_VFS_SMB
 	smbfs_set_debugf (mc_args__netfs_logfile);
-#endif				/* WITH_SMBFS */
+#endif				/* ENABLE_VFS_SMB */
     }
 
-#ifdef WITH_SMBFS
+#ifdef ENABLE_VFS_SMB
     if (mc_args__debug_level != 0)
 	smbfs_set_debug (mc_args__debug_level);
-#endif				/* WITH_SMBFS */
+#endif				/* ENABLE_VFS_SMB */
 #endif				/* USE_NETCODE */
 
     base = x_basename (argv[0]);
@@ -2162,7 +2176,7 @@ main (int argc, char *argv[])
     dlg_set_default_colors ();
 
     if ( ! isInitialized ) {
-        message (D_ERROR, _("Warning"), error->message);
+        message (D_ERROR, _("Warning"), "%s", error->message);
         g_error_free(error);
         error = NULL;
     }
@@ -2199,12 +2213,12 @@ main (int argc, char *argv[])
 
 #ifdef HAVE_SUBSHELL_SUPPORT
     if (use_subshell) {
-	prompt = strip_ctrl_codes (subshell_prompt);
-	if (!prompt)
-	    prompt = "";
+	mc_prompt = strip_ctrl_codes (subshell_prompt);
+	if (mc_prompt == NULL)
+	    mc_prompt = "";
     } else
 #endif				/* HAVE_SUBSHELL_SUPPORT */
-	prompt = (geteuid () == 0) ? "# " : "$ ";
+	mc_prompt = (geteuid () == 0) ? "# " : "$ ";
 
 
     /* Program main loop */

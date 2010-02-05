@@ -28,7 +28,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "global.h"
+#include "lib/global.h"
 #include "dialog.h"
 #include "widget.h"
 #include "wtools.h"
@@ -92,7 +92,7 @@ select_charset (int center_y, int center_x, int current_charset, gboolean seldis
 	? ((current_charset < 0) ? n_codepages : current_charset)
 	: (current_charset + 1);
 
-    listbox_select_by_number (listbox->list, i);
+    listbox_select_entry (listbox->list, i);
 
     i = run_listbox (listbox);
 

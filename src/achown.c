@@ -33,16 +33,17 @@
 #include <pwd.h>
 #include <grp.h>
 
-#include "global.h"
+#include "lib/global.h"
 
-#include "../src/tty/tty.h"
-#include "../src/tty/key.h"		/* XCTRL and ALT macros */
-#include "../src/skin/skin.h"
+#include "lib/tty/tty.h"
+#include "lib/tty/key.h"		/* XCTRL and ALT macros */
+#include "lib/skin.h"
+#include "lib/vfs/mc-vfs/vfs.h"
+#include "lib/strutil.h"
 
 #include "dialog.h"
 #include "widget.h"
 #include "wtools.h"		/* For init_box_colors() */
-#include "strutil.h"
 
 #include "dir.h"
 #include "panel.h"		/* Needed for the externs */
@@ -249,7 +250,7 @@ do_enter_key (Dlg_head * h, int f_pos)
     WListbox *chl_list;
     struct passwd *chl_pass;
     struct group *chl_grp;
-    WLEntry *fe;
+    int fe;
     int lxx, lyy, chl_end, b_pos;
     int is_owner;
     const char *title;
@@ -267,7 +268,7 @@ do_enter_key (Dlg_head * h, int f_pos)
 			"[Advanced Chown]", title, DLG_COMPACT | DLG_REVERSE);
 
 	/* get new listboxes */
-	chl_list = listbox_new (1, 1, 11, 15, NULL);
+	chl_list = listbox_new (1, 1, 11, 15, FALSE, NULL);
 
 	listbox_add_item (chl_list, LISTBOX_APPEND_AT_END, 0,
 	    "<Unknown>", NULL);
@@ -294,8 +295,7 @@ do_enter_key (Dlg_head * h, int f_pos)
 				      get_group (sf_stat->st_gid));
 	}
 
-	if (fe)
-	    listbox_select_entry (chl_list, fe);
+	listbox_select_entry (chl_list, fe);
 
 	b_pos = chl_list->pos;
 	add_widget (chl_dlg, chl_list);
@@ -304,14 +304,17 @@ do_enter_key (Dlg_head * h, int f_pos)
 
 	if (b_pos != chl_list->pos) {
 	    int ok = 0;
+	    char *text;
+
+	    listbox_get_current (chl_list, &text, NULL);
 	    if (is_owner) {
-		chl_pass = getpwnam (chl_list->current->text);
+		chl_pass = getpwnam (text);
 		if (chl_pass) {
 		    ok = 1;
 		    sf_stat->st_uid = chl_pass->pw_uid;
 		}
 	    } else {
-		chl_grp = getgrnam (chl_list->current->text);
+		chl_grp = getgrnam (text);
 		if (chl_grp) {
 		    sf_stat->st_gid = chl_grp->gr_gid;
 		    ok = 1;

@@ -76,11 +76,13 @@
 
 #include <unistd.h>
 
-#include "global.h"
+#include "lib/global.h"
 
-#include "../src/tty/key.h"		/* tty_get_event */
-
-#include "../src/search/search.h"
+#include "lib/tty/key.h"		/* tty_get_event */
+#include "lib/search.h"
+#include "lib/vfs/mc-vfs/vfs.h"
+#include "lib/strescape.h"
+#include "lib/strutil.h"
 
 #include "setup.h"		/* verbose */
 #include "dialog.h"		/* do_refresh() */
@@ -91,9 +93,6 @@
 #include "panel.h"		/* current_panel */
 #include "fileopctx.h"		/* FILE_CONT */
 #include "filegui.h"
-#include "util.h"		/* strip_password() */
-#include "strutil.h"
-#include "../src/strescape.h"
 
 /* }}} */
 typedef enum {
@@ -877,10 +876,6 @@ file_mask_dialog (FileOpContext *ctx, FileOperation operation,
     char *def_text_secure;
     int val;
 
-#ifdef ENABLE_NLS
-    static gboolean i18n = FALSE;
-#endif				/* !ENABLE_NLS */
-
     QuickWidget fmd_widgets[] =
     {
 	/* 0 */ QUICK_BUTTON (42, 64, 10, FMDY, N_("&Cancel"), B_CANCEL, NULL),
@@ -916,13 +911,6 @@ file_mask_dialog (FileOpContext *ctx, FileOperation operation,
     g_return_val_if_fail (ctx != NULL, NULL);
 
 #ifdef ENABLE_NLS
-    if (!i18n) {
-	for (i = sizeof (op_names) / sizeof (op_names[0]); i--;)
-	    op_names[i] = Q_(op_names[i]);
-
-	i18n = TRUE;
-    }
-
     /* buttons */
     for (i = 0; i <= 2 - OFFSET; i++)
 	fmd_widgets[i].u.button.text = _(fmd_widgets[i].u.button.text);

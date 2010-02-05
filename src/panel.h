@@ -6,10 +6,11 @@
 #ifndef MC_PANEL_H
 #define MC_PANEL_H
 
+#include "lib/fs.h"			/* MC_MAXPATHLEN */
+#include "lib/strutil.h"
+
 #include "dir.h"		/* dir_list */
 #include "dialog.h"		/* Widget */
-#include "fs.h"			/* MC_MAXPATHLEN */
-#include "strutil.h"
 
 #define selection(p) (&(p->dir.list[p->selected]))
 #define DEFAULT_USER_FORMAT "half type name | size | perm"
@@ -23,13 +24,13 @@ enum list_types {
     list_user			/* User defined */
 };
 
-enum view_modes {
-    view_listing,		/* Directory listing */
-    view_info,			/* Information panel */
-    view_tree,			/* Tree view */
-    view_quick,			/* Quick view */
-    view_nothing		/* Undefined */
-};
+typedef enum {
+    view_listing	= 0,		/* Directory listing */
+    view_info		= 1,		/* Information panel */
+    view_tree		= 2,		/* Tree view */
+    view_quick		= 3,		/* Quick view */
+    view_nothing	= 4,		/* Undefined */
+} panel_view_mode_t;
 
 enum panel_display_enum {
     frame_full,			/* full screen frame */

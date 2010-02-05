@@ -28,20 +28,32 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-#include "global.h"
+#include "lib/global.h"
 
-#include "../src/tty/tty.h"
-#include "../src/tty/key.h"
-#include "../src/tty/mouse.h"		/* To make view.h happy */
+#include "lib/tty/tty.h"
+#include "lib/tty/key.h"
+#include "lib/tty/mouse.h"		/* To make view.h happy */
+#include "lib/vfs/mc-vfs/vfs.h"
+#include "lib/mcconfig.h"
+#include "lib/fileloc.h"
+
+#ifdef ENABLE_VFS
+#include "lib/vfs/mc-vfs/gc.h"
+#endif
+
+#ifdef USE_NETCODE
+#   include "lib/vfs/mc-vfs/ftpfs.h"
+#   include "lib/vfs/mc-vfs/fish.h"
+#endif
+#include "lib/strutil.h"	/* str_isutf8 () */
 
 #include "args.h"
 #include "dir.h"
 #include "panel.h"
 #include "main.h"
 #include "tree.h"		/* xtree_mode */
-#include "../src/mcconfig/mcconfig.h"
 #include "setup.h"
-#include "../src/viewer/mcviewer.h" /* For the externs */
+#include "src/viewer/mcviewer.h" /* For the externs */
 #include "hotlist.h"		/* load/save/done hotlist */
 #include "panelize.h"		/* load/save/done panelize */
 #include "layout.h"
@@ -49,30 +61,17 @@
 #include "cmd.h"
 #include "file.h"		/* safe_delete */
 #include "keybind.h"		/* lookup_action */
-#include "fileloc.h"
 #include "wtools.h"
-
-#ifdef USE_VFS
-#include "../vfs/gc.h"
-#endif
 
 #ifdef HAVE_CHARSET
 #include "charsets.h"
 #endif
 
-#ifdef USE_NETCODE
-#   include "../vfs/ftpfs.h"
-#   include "../vfs/fish.h"
-#endif
-
 #ifdef USE_INTERNAL_EDIT
-#   include "../edit/edit.h"
+#   include "src/editor/edit.h"
 #endif
 
-#include "../src/strutil.h"	/* str_isutf8 () */
 
-
-extern char *find_ignore_dirs;
 
 extern int num_history_items_recorded;
 
@@ -83,8 +82,8 @@ char *setup_color_string;
 char *term_color_string;
 char *color_terminal_string;
 
-int startup_left_mode;
-int startup_right_mode;
+panel_view_mode_t startup_left_mode;
+panel_view_mode_t startup_right_mode;
 
 /* Ugly hack to allow panel_save_setup to work as a place holder for */
 /* default panel values */
@@ -106,13 +105,13 @@ static const struct {
 
 static const struct {
     const char *opt_name;
-    int  opt_type;
+    panel_view_mode_t opt_type;
 } panel_types [] = {
     { "listing",   view_listing },
-    { "quickview", view_quick   },
+    { "quickview", view_quick },
     { "info",      view_info },
     { "tree",      view_tree },
-    { 0, 0 }
+    { NULL,        view_listing }
 };
 
 static const struct {
@@ -156,6 +155,7 @@ static const struct {
     { "confirm_delete", &confirm_delete },
     { "confirm_overwrite", &confirm_overwrite },
     { "confirm_execute", &confirm_execute },
+    { "confirm_history_cleanup", &confirm_history_cleanup },
     { "confirm_exit", &confirm_exit },
     { "confirm_directory_hotlist_delete", &confirm_directory_hotlist_delete },
     { "safe_delete", &safe_delete },
@@ -187,7 +187,7 @@ static const struct {
     { "xtree_mode", &xtree_mode },
     { "num_history_items_recorded", &num_history_items_recorded },
     { "file_op_compute_totals", &file_op_compute_totals },
-#ifdef USE_VFS
+#ifdef ENABLE_VFS
     { "vfs_timeout", &vfs_timeout },
 #ifdef USE_NETCODE
     { "ftpfs_directory_timeout", &ftpfs_directory_timeout },
@@ -200,7 +200,7 @@ static const struct {
     { "ftpfs_first_cd_then_ls", &ftpfs_first_cd_then_ls },
     { "fish_directory_timeout", &fish_directory_timeout },
 #endif /* USE_NETCODE */
-#endif /* USE_VFS */
+#endif /* ENABLE_VFS */
 #ifdef USE_INTERNAL_EDIT
     { "editor_word_wrap_line_length", &option_word_wrap_line_length },
     { "editor_tab_spacing", &option_tab_spacing },
@@ -221,6 +221,7 @@ static const struct {
     { "editor_line_state", &option_line_state },
     { "editor_simple_statusbar", &simple_statusbar },
     { "editor_check_new_line", &option_check_nl_at_eof },
+    { "editor_show_right_margin", &show_right_margin },
 #endif /* USE_INTERNAL_EDIT */
 
     { "nice_rotating_dash", &nice_rotating_dash },
@@ -241,6 +242,7 @@ static const struct {
 #ifdef USE_INTERNAL_EDIT
     { "editor_backup_extension", &option_backup_ext, "~" },
 #endif
+    { "mcview_eof", &mcview_show_eof, "" },
     { NULL, NULL, NULL }
 };
 
@@ -248,7 +250,7 @@ void
 panel_save_setup (struct WPanel *panel, const char *section)
 {
     char *buffer;
-    int  i;
+    size_t i;
 
     mc_config_set_int(mc_panels_config, section, "reverse", panel->reverse);
     mc_config_set_int(mc_panels_config, section, "case_sensitive", panel->case_sensitive);
@@ -315,14 +317,14 @@ save_configure (void)
 }
 
 static void
-panel_save_type (const char *section, int type)
+panel_save_type (const char *section, panel_view_mode_t type)
 {
     int i;
 
-    for (i = 0; panel_types [i].opt_name; i++)
-	if (panel_types [i].opt_type == type){
-	    mc_config_set_string(mc_panels_config, section,
-	                "display", panel_types [i].opt_name);
+    for (i = 0; panel_types [i].opt_name != NULL; i++)
+	if (panel_types [i].opt_type == type) {
+	    mc_config_set_string (mc_panels_config, section,
+				    "display", panel_types [i].opt_name);
 	    break;
 	}
 }
@@ -330,7 +332,11 @@ panel_save_type (const char *section, int type)
 void
 save_panel_types (void)
 {
-    int type;
+    panel_view_mode_t type;
+
+    if (!mc_config_get_int (mc_main_config, CONFIG_APP_SECTION,
+			    "auto_save_setup_panels", auto_save_setup))
+	return;
 
     type = get_display_type (0);
     panel_save_type ("New Left Panel", type);
@@ -349,7 +355,7 @@ save_panel_types (void)
 				get_current_index () == 0 ? "1" : "0");
 
     if (mc_panels_config->ini_path == NULL)
-        mc_panels_config->ini_path = g_strdup(panels_profile_name);
+        mc_panels_config->ini_path = g_strdup (panels_profile_name);
 
     mc_config_del_group (mc_panels_config, "Temporal:New Left Panel");
     mc_config_del_group (mc_panels_config, "Temporal:New Right Panel");
@@ -375,13 +381,13 @@ save_setup (void)
     save_panel_types ();
 /*     directory_history_save (); */
 
-#if defined(USE_VFS) && defined (USE_NETCODE)
+#if defined(ENABLE_VFS) && defined (USE_NETCODE)
     mc_config_set_string(mc_main_config, "Misc" , "ftpfs_password",
 			       ftpfs_anonymous_passwd);
     if (ftpfs_proxy_host)
 	mc_config_set_string(mc_main_config, "Misc" , "ftp_proxy_host",
 				   ftpfs_proxy_host);
-#endif /* USE_VFS && USE_NETCODE */
+#endif /* ENABLE_VFS && USE_NETCODE */
 
 #ifdef HAVE_CHARSET
     mc_config_set_string (mc_main_config, "Misc" , "display_codepage",
@@ -402,7 +408,7 @@ save_setup (void)
 void
 panel_load_setup (WPanel *panel, const char *section)
 {
-    int i;
+    size_t i;
     char *buffer;
 
     panel->reverse = mc_config_get_int(mc_panels_config, section, "reverse", 0);
@@ -454,23 +460,22 @@ load_layout ()
 	    mc_config_get_int(mc_main_config,"Layout", layout [i].opt_name, *layout [i].opt_addr);
 }
 
-static int
+static panel_view_mode_t
 setup__load_panel_state (const char *section)
 {
     char *buffer;
-    int  i;
-
-    int mode = view_listing;
+    size_t i;
+    panel_view_mode_t mode = view_listing;
 
     /* Load the display mode */
-    buffer = mc_config_get_string(mc_panels_config, section, "display", "listing");
+    buffer = mc_config_get_string (mc_panels_config, section, "display", "listing");
 
-    for (i = 0; panel_types [i].opt_name; i++)
-	if ( g_strcasecmp (panel_types [i].opt_name, buffer) == 0){
+    for (i = 0; panel_types [i].opt_name != NULL; i++)
+	if (g_strcasecmp (panel_types [i].opt_name, buffer) == 0) {
 	    mode = panel_types [i].opt_type;
 	    break;
 	}
-    g_free(buffer);
+    g_free (buffer);
     return mode;
 }
 
@@ -494,7 +499,6 @@ setup__move_panels_config_into_separate_file(const char*profile)
     mc_config_t *tmp_cfg;
     char **groups, **curr_grp;
     const char *need_grp;
-    gsize groups_count;
 
     if (!exist_file(profile))
         return;
@@ -503,7 +507,7 @@ setup__move_panels_config_into_separate_file(const char*profile)
     if (!tmp_cfg)
         return;
 
-    curr_grp = groups = mc_config_get_groups (tmp_cfg, &groups_count);
+    curr_grp = groups = mc_config_get_groups (tmp_cfg, NULL);
     if (!groups)
     {
         mc_config_deinit(tmp_cfg);
@@ -769,7 +773,7 @@ load_setup (void)
     startup_right_mode = setup__load_panel_state ("New Right Panel");
 
     /* At least one of the panels is a listing panel */
-    if (startup_left_mode != view_listing && startup_right_mode!=view_listing)
+    if (startup_left_mode != view_listing && startup_right_mode != view_listing)
 	startup_left_mode = view_listing;
 
     if (!other_dir){
@@ -786,10 +790,6 @@ load_setup (void)
 #ifdef USE_NETCODE
     ftpfs_proxy_host = mc_config_get_string(mc_main_config, "Misc", "ftp_proxy_host", "gate");
 #endif
-    setup_color_string = mc_config_get_string(mc_main_config, "Misc", "find_ignore_dirs", "");
-    if (setup_color_string [0])
-	find_ignore_dirs = g_strconcat (":", setup_color_string, ":", (char *) NULL);
-    g_free(setup_color_string);
 
     /* The default color and the terminal dependent color */
     setup_color_string = mc_config_get_string(mc_main_config, "Colors", "base_color", "");
@@ -799,9 +799,9 @@ load_setup (void)
     /* Load the directory history */
 /*    directory_history_load (); */
     /* Remove the temporal entries */
-#if defined(USE_VFS) && defined (USE_NETCODE)
+#if defined(ENABLE_VFS) && defined (USE_NETCODE)
     ftpfs_init_passwd ();
-#endif /* USE_VFS && USE_NETCODE */
+#endif /* ENABLE_VFS && USE_NETCODE */
 
 #ifdef HAVE_CHARSET
     if ( load_codepages_list() > 0 ) {
@@ -832,7 +832,7 @@ load_setup (void)
 #endif /* HAVE_CHARSET */
 }
 
-#if defined(USE_VFS) && defined (USE_NETCODE)
+#if defined(ENABLE_VFS) && defined (USE_NETCODE)
 char *
 load_anon_passwd ()
 {
@@ -845,7 +845,7 @@ load_anon_passwd ()
     g_free(buffer);
     return NULL;
 }
-#endif /* USE_VFS && USE_NETCODE */
+#endif /* ENABLE_VFS && USE_NETCODE */
 
 void
 done_setup (void)
@@ -1032,17 +1032,27 @@ void
 free_keymap_defs (void)
 {
 #ifdef USE_INTERNAL_EDIT
-    g_array_free (editor_keymap, TRUE);
-    g_array_free (editor_x_keymap, TRUE);
+    if (editor_keymap != NULL)
+	g_array_free (editor_keymap, TRUE);
+    if (editor_x_keymap != NULL)
+	g_array_free (editor_x_keymap, TRUE);
 #endif
-    g_array_free (viewer_keymap, TRUE);
-    g_array_free (viewer_hex_keymap, TRUE);
-    g_array_free (main_keymap, TRUE);
-    g_array_free (main_x_keymap, TRUE);
-    g_array_free (panel_keymap, TRUE);
-    g_array_free (input_keymap, TRUE);
-    g_array_free (tree_keymap, TRUE);
-    g_array_free (help_keymap, TRUE);
+    if (viewer_keymap != NULL)
+	g_array_free (viewer_keymap, TRUE);
+    if (viewer_hex_keymap != NULL)
+	g_array_free (viewer_hex_keymap, TRUE);
+    if (main_keymap != NULL)
+	g_array_free (main_keymap, TRUE);
+    if (main_x_keymap != NULL)
+	g_array_free (main_x_keymap, TRUE);
+    if (panel_keymap != NULL)
+	g_array_free (panel_keymap, TRUE);
+    if (input_keymap != NULL)
+	g_array_free (input_keymap, TRUE);
+    if (tree_keymap != NULL)
+	g_array_free (tree_keymap, TRUE);
+    if (help_keymap != NULL)
+	g_array_free (help_keymap, TRUE);
 }
 
 void

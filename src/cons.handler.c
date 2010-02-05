@@ -34,13 +34,13 @@
 #endif
 #include <unistd.h>
 
-#include "global.h"
+#include "lib/global.h"
 
-#include "../src/tty/tty.h"
-#include "../src/skin/skin.h"		/* tty_set_normal_attrs */
-#include "../src/tty/win.h"
+#include "lib/tty/tty.h"
+#include "lib/skin.h"		/* tty_set_normal_attrs */
+#include "lib/tty/win.h"
 
-#include "cons.saver.h"
+#include "consaver/cons.saver.h"
 
 signed char console_flag = 0;
 
@@ -217,11 +217,9 @@ console_init (void)
     memset (&screen_shot, 0, sizeof (screen_shot));
     screen_shot.xsize = screen_info.mv_csz;
     screen_shot.ysize = screen_info.mv_rsz;
-    if ((screen_shot.buf =
-	 g_malloc (screen_info.mv_csz * screen_info.mv_rsz * 2)) == NULL)
-	return;
-
-    console_flag = 1;
+    screen_shot.buf = g_try_malloc (screen_info.mv_csz * screen_info.mv_rsz * 2);
+    if (screen_shot.buf != NULL)
+	console_flag = 1;
 }
 
 static void

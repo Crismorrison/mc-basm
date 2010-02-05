@@ -34,15 +34,14 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "global.h"
+#include "lib/global.h"
+#include "lib/tty/win.h"
+#include "lib/tty/key.h"		/* KEY_M_ */
+#include "lib/tty/tty.h"		/* keys */
+#include "lib/strutil.h"
 
 #include "cmddef.h"		/* CK_ cmd name const */
-#include "tty/win.h"
-#include "tty/key.h"		/* KEY_M_ */
-#include "tty/tty.h"		/* keys */
 #include "wtools.h"
-#include "strutil.h"
-
 #include "keybind.h"
 
 static name_keymap_t command_names[] = {
@@ -84,6 +83,7 @@ static name_keymap_t command_names[] = {
     { "EditCopy",                          CK_Copy },
     { "EditMove",                          CK_Move },
     { "EditRemove",                        CK_Remove },
+    { "EditMarkAll",                       CK_Mark_All },
     { "EditUnmark",                        CK_Unmark },
     { "EditSaveBlock",                     CK_Save_Block },
     { "EditColumnMark",                    CK_Column_Mark },
@@ -92,6 +92,7 @@ static name_keymap_t command_names[] = {
     { "EditReplace",                       CK_Replace },
     { "EditReplaceAgain",                  CK_Replace_Again },
     { "EditCompleteWord",                  CK_Complete_Word },
+
 #if 0
     { "EditDebugStart",                    CK_Debug_Start },
     { "EditDebugStop",                     CK_Debug_Stop },
@@ -189,6 +190,7 @@ static name_keymap_t command_names[] = {
     { "EditToggleLineState",               CK_Toggle_Line_State },
     { "EditToggleTabTWS",                  CK_Toggle_Tab_TWS },
     { "EditToggleSyntax",                  CK_Toggle_Syntax },
+    { "EditToggleShowMargin",              CK_Toggle_Show_Margin },
     { "EditFindDefinition",                CK_Find_Definition },
     { "EditLoadPrevFile",                  CK_Load_Prev_File },
     { "EditLoadNextFile",                  CK_Load_Next_File },
@@ -342,9 +344,9 @@ static name_keymap_t command_names[] = {
     { "CmdReverseSelection",             CK_ReverseSelectionCmd },
     { "CmdSaveSetup",                    CK_SaveSetupCmd },
     { "CmdSelect",                       CK_SelectCmd },
-#if defined (USE_NETCODE) && defined (WITH_SMBFS)
+#if defined (USE_NETCODE) && defined (ENABLE_VFS_SMB)
     { "CmdSmblinkCmd",                   CK_SmblinkCmd },
-#endif
+#endif /* USE_NETCODE || ENABLE_VFS_SMB */
     { "CmdSwapPanel",                    CK_SwapCmd },
     { "CmdSymlink",                      CK_SymlinkCmd },
     { "CmdTree",                         CK_TreeCmd },
@@ -364,6 +366,7 @@ static name_keymap_t command_names[] = {
     { "CmdCopyCurrentTagged",            CK_CopyCurrentTagged },
     { "CmdCopyOtherTagged",              CK_CopyOtherTagged },
     { "CmdToggleShowHidden",             CK_ToggleShowHidden },
+    { "CmdTogglePanelsSplit",            CK_TogglePanelsSplit },
 
     /* panel */
     { "PanelChdirOtherPanel",            CK_PanelChdirOtherPanel },
@@ -828,6 +831,7 @@ const global_keymap_t default_main_map[] = {
     /* View output */
     { XCTRL ('o'),  CK_ShowCommandLine,               "C-o" },
     { ALT ('.'),    CK_ToggleShowHidden,              "M-." },
+    { ALT (','),    CK_TogglePanelsSplit,             "M-," },
     { XCTRL ('x'),  CK_StartExtMap1,                  "C-x" },
     /* Select/unselect group */
     { KEY_KP_ADD,       CK_SelectCmd,           "+" },
@@ -838,9 +842,9 @@ const global_keymap_t default_main_map[] = {
 
 const global_keymap_t default_main_x_map[] = {
     { 'd',         CK_CompareDirsCmd,      "d" },
-#ifdef USE_VFS
+#ifdef ENABLE_VFS
     { 'a',         CK_ReselectVfs,         "a"},
-#endif				/* USE_VFS */
+#endif				/* ENABLE_VFS */
     { 'p',         CK_CopyCurrentPathname, "p" },
     { XCTRL ('p'), CK_CopyOtherPathname,   "C-p" },
     { 't',         CK_CopyCurrentTagged,   "t" },
@@ -951,9 +955,9 @@ keybind_cmd_bind (GArray *keymap, const char *keybind, unsigned long action)
 }
 
 unsigned long
-lookup_action (const char *keyname)
+lookup_action (const char *name)
 {
-    const name_keymap_t key = { keyname, 0 };
+    const name_keymap_t key = { name, 0 };
     name_keymap_t *res;
 
     sort_command_names ();

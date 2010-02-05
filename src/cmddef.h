@@ -63,6 +63,7 @@
 #define CK_Column_Mark		208
 #define CK_Shift_Block_Left	211
 #define CK_Shift_Block_Right	212
+#define CK_Mark_All		213
 
 /* search and replace */
 #define CK_Find			301
@@ -128,6 +129,7 @@
 #define CK_Maximize		458
 #endif
 
+#define CK_Toggle_Show_Margin	460
 #define CK_Toggle_Tab_TWS	470
 #define CK_Toggle_Syntax	480
 #define CK_Toggle_Line_State	490
@@ -364,6 +366,7 @@
 #define CK_ViewFileCmd                  7071
 #define CK_HelpCmd                      7072
 #define CK_MenuCmd                      7073
+#define CK_TogglePanelsSplit            7074
 
 /* panels */
 #define CK_PanelChdirOtherPanel         8001

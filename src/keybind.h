@@ -2,7 +2,7 @@
 #ifndef MC_KEYBIND_H
 #define MC_KEYBIND_H
 
-#include "global.h"
+#include "lib/global.h"
 
 typedef struct name_keymap_t {
     const char *name;
@@ -25,7 +25,7 @@ typedef struct global_keymap_t {
 } global_keymap_t;
 
 void keybind_cmd_bind (GArray *keymap, const char *keybind, unsigned long action);
-unsigned long lookup_action (const char *keyname);
+unsigned long lookup_action (const char *name);
 const char *lookup_keymap_shortcut (const global_keymap_t *keymap, unsigned long action);
 unsigned long lookup_keymap_command (const global_keymap_t *keymap, long key);
 

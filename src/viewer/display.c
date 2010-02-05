@@ -15,7 +15,7 @@
 	       2005 Roland Illig <roland.illig@gmx.de>
 	       2009 Slava Zanko <slavazanko@google.com>
 	       2009 Andrew Borodin <aborodin@vmail.ru>
-	       2009 Ilia Maslakov <il.smind@gmail.com>
+	       2009, 2010 Ilia Maslakov <il.smind@gmail.com>
 
    This file is part of the Midnight Commander.
 
@@ -37,14 +37,16 @@
 
 #include <config.h>
 
-#include "../src/global.h"
-#include "../src/skin/skin.h"
-#include "../src/tty/tty.h"
-#include "../src/tty/key.h"
-#include "../src/strutil.h"
-#include "../src/main.h"
-#include "../src/dialog.h"		/* Dlg_head */
-#include "../src/widget.h"		/* WButtonBar */
+#include "lib/global.h"
+#include "lib/skin.h"
+#include "lib/tty/tty.h"
+#include "lib/tty/key.h"
+#include "lib/strutil.h"
+
+#include "src/main.h"
+#include "src/dialog.h"		/* Dlg_head */
+#include "src/charsets.h"
+#include "src/widget.h"		/* WButtonBar */
 
 #include "internal.h"
 #include "mcviewer.h"
@@ -87,7 +89,6 @@ mcview_set_buttonbar (mcview_t *view)
             buttonbar_set_label (b, 2, "", keymap, (Widget *) view);
 
         buttonbar_set_label (b, 4, Q_ ("ButtonBar|Ascii"), keymap, (Widget *) view);
-        buttonbar_set_label (b, 5, Q_ ("ButtonBar|Goto"), keymap, (Widget *) view);
         buttonbar_set_label (b, 6, Q_ ("ButtonBar|Save"), keymap, (Widget *) view);
         buttonbar_set_label (b, 7, Q_ ("ButtonBar|HxSrch"), keymap, (Widget *) view);
 
@@ -96,11 +97,11 @@ mcview_set_buttonbar (mcview_t *view)
                                                         : Q_ ("ButtonBar|Wrap"),
                                 keymap, (Widget *) view);
         buttonbar_set_label (b, 4, Q_ ("ButtonBar|Hex"), keymap, (Widget *) view);
-        buttonbar_set_label (b, 5, Q_ ("ButtonBar|Line"), keymap, (Widget *) view);
         buttonbar_set_label (b, 6, "", keymap, (Widget *) view);
         buttonbar_set_label (b, 7, Q_ ("ButtonBar|Search"), keymap, (Widget *) view);
     }
 
+    buttonbar_set_label (b, 5, Q_ ("ButtonBar|Goto"), keymap, (Widget *) view);
     buttonbar_set_label (b, 8, view->magic_mode ? Q_ ("ButtonBar|Raw")
                                                 : Q_ ("ButtonBar|Parse"),
                                 keymap, (Widget *) view);
@@ -127,20 +128,19 @@ mcview_display_status (mcview_t * view)
     const screen_dimen left = view->status_area.left;
     const screen_dimen width = view->status_area.width;
     const screen_dimen height = view->status_area.height;
-    const char *file_label, *file_name;
-    screen_dimen file_label_width;
-    int i;
-    char *tmp;
+    const char *file_label;
+    screen_dimen file_label_width, i = 0;
 
     if (height < 1)
         return;
 
     tty_setcolor (SELECTED_COLOR);
     widget_move (view, top, left);
-    tty_draw_hline (top, left, ' ', width);
+    tty_draw_hline (-1, -1, ' ', width);
 
-    file_label = _("File: %s");
+    file_label = view->filename ? view->filename : view->command ? view->command : "";
     file_label_width = str_term_width1 (file_label) - 2;
+<<<<<<< HEAD
     file_name = view->filename ? view->filename : view->command ? view->command : "";
 
     if (width < file_label_width + 6)
@@ -181,9 +181,33 @@ mcview_display_status (mcview_t * view)
         }
         if (width > 26) {
             mcview_percent (view, view->hex_mode ? view->hex_cursor : view->dpy_end);
+=======
+    if (width > 40) {
+        char buffer [BUF_TINY];
+        widget_move (view, top, width - 32);
+        if (view->hex_mode) {
+            tty_printf ("0x%08lx", (unsigned long) view->hex_cursor);
+        } else {
+            size_trunc_len (buffer, 5, mcview_get_filesize (view), 0);
+            tty_printf ("%9lli/%s%s %s", view->dpy_end,
+                        buffer,
+                        mcview_may_still_grow (view) ? "+" : " ",
+#ifdef HAVE_CHARSET
+                        source_codepage >= 0 ? get_codepage_id (source_codepage) : ""
+#else
+                        ""
+#endif
+                        );
+>>>>>>> origin/master
         }
     }
-    tty_setcolor (SELECTED_COLOR);
+    widget_move (view, top, left);
+    if (width > 40)
+        tty_print_string (str_fit_to_term (file_label, width - 34, J_LEFT_FIT));
+    else
+        tty_print_string (str_fit_to_term (file_label, width - 5, J_LEFT_FIT));
+    if (width > 26)
+        mcview_percent (view, view->hex_mode ? view->hex_cursor : view->dpy_end);
 }
 
 /* --------------------------------------------------------------------------------------------- */
@@ -211,8 +235,7 @@ mcview_update (mcview_t * view)
         dirt_limit++;
         if (dirt_limit > mcview_max_dirt_limit)
             dirt_limit = mcview_max_dirt_limit;
-    }
-    if (view->dirty) {
+    } else if (view->dirty > 0) {
         if (is_idle ()) {
             /* We have time to update the screen properly */
             mcview_display (view);
@@ -235,7 +258,6 @@ mcview_update (mcview_t * view)
 void
 mcview_display (mcview_t * view)
 {
-    mcview_compute_areas (view);
     if (view->hex_mode) {
         mcview_display_hex (view);
     } else if (view->text_nroff_mode) {
@@ -296,10 +318,8 @@ mcview_compute_areas (mcview_t * view)
     view->data_area.top = y;
     y += view->data_area.height;
 
-    if (ruler == RULER_BOTTOM) {
+    if (ruler == RULER_BOTTOM)
         view->ruler_area.top = y;
-        y += view->ruler_area.height;
-    }
 }
 
 /* --------------------------------------------------------------------------------------------- */
@@ -387,25 +407,6 @@ mcview_display_ruler (mcview_t * view)
         }
     }
     tty_setcolor (NORMAL_COLOR);
-}
-
-/* --------------------------------------------------------------------------------------------- */
-
-void
-mcview_adjust_size (Dlg_head *h)
-{
-    mcview_t *view;
-    WButtonBar *b;
-
-    /* Look up the viewer and the buttonbar, we assume only two widgets here */
-    view = (mcview_t *) find_widget_type (h, mcview_callback);
-    b = find_buttonbar (h);
-
-    widget_set_size (&view->widget, 0, 0, LINES - 1, COLS);
-    widget_set_size (&b->widget , LINES - 1, 0, 1, COLS);
-
-    mcview_compute_areas (view);
-    mcview_update_bytes_per_line (view);
 }
 
 /* --------------------------------------------------------------------------------------------- */

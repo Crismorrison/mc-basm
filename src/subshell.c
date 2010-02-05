@@ -40,25 +40,25 @@
 #ifdef HAVE_SYS_IOCTL_H
 #  include <sys/ioctl.h>
 #endif
-#ifdef HAVE_TERMIOS_H
 #include <termios.h>
-#endif
 #include <unistd.h>
 
 #ifdef HAVE_STROPTS_H
 #  include <stropts.h> /* For I_PUSH */
 #endif /* HAVE_STROPTS_H */
 
-#include "global.h"
-#include "../src/tty/tty.h"	/* LINES */
+#include "lib/global.h"
+#include "lib/tty/tty.h"	/* LINES */
+#include "lib/tty/key.h"	/* XCTRL */
+#include "lib/vfs/mc-vfs/vfs.h"
+#include "lib/strutil.h"
+#include "lib/fileloc.h"
+
 #include "panel.h"	/* current_panel */
 #include "wtools.h"	/* query_dialog() */
 #include "main.h"	/* do_update_prompt() */
-#include "cons.saver.h"	/* handle_console() */
-#include "../src/tty/key.h"	/* XCTRL */
+#include "consaver/cons.saver.h"	/* handle_console() */
 #include "subshell.h"
-#include "strutil.h"
-#include "fileloc.h"
 
 #ifndef WEXITSTATUS
 #   define WEXITSTATUS(stat_val) ((unsigned)(stat_val) >> 8)
@@ -198,9 +198,7 @@ static void
 init_subshell_child (const char *pty_name)
 {
     const char *init_file = NULL;
-#ifdef HAVE_GETSID
     pid_t mc_sid;
-#endif				/* HAVE_GETSID */
 
     (void) pty_name;
     setsid ();			/* Get a fresh terminal session */
@@ -215,10 +213,7 @@ init_subshell_child (const char *pty_name)
 
     /* Configure its terminal modes and window size */
 
-    /* Set up the pty with the same termios flags as our own tty, plus  */
-    /* TOSTOP, which keeps background processes from writing to the pty */
-
-    shell_mode.c_lflag |= TOSTOP;	/* So background writers get SIGTTOU */
+    /* Set up the pty with the same termios flags as our own tty */
     if (tcsetattr (subshell_pty_slave, TCSANOW, &shell_mode)) {
 	fprintf (stderr, "Cannot set pty terminal modes: %s\r\n",
 		 unix_error_string (errno));
@@ -235,7 +230,6 @@ init_subshell_child (const char *pty_name)
     /* and the user's startup file may do a `cd' command anyway   */
     chdir (home_dir);		/* FIXME? What about when we re-run the subshell? */
 
-#ifdef HAVE_GETSID
     /* Set MC_SID to prevent running one mc from another */
     mc_sid = getsid (0);
     if (mc_sid != -1) {
@@ -244,7 +238,6 @@ init_subshell_child (const char *pty_name)
 		    (long) mc_sid);
 	putenv (g_strdup (sid_str));
     }
-#endif				/* HAVE_GETSID */
 
     switch (subshell_type) {
     case BASH:
@@ -320,7 +313,6 @@ init_subshell_child (const char *pty_name)
 }
 
 
-#ifdef HAVE_GETSID
 /*
  * Check MC_SID to prevent running one mc from another.
  * Return:
@@ -362,7 +354,6 @@ check_sid (void)
 
     return 1;
 }
-#endif				/* HAVE_GETSID */
 
 
 /*
@@ -381,7 +372,6 @@ init_subshell (void)
     static char pty_name[BUF_SMALL];
     char precmd[BUF_SMALL];
 
-#ifdef HAVE_GETSID
     switch (check_sid ()) {
     case 1:
 	use_subshell = FALSE;
@@ -391,7 +381,6 @@ init_subshell (void)
 	midnight_shutdown = 1;
 	return;
     }
-#endif				/* HAVE_GETSID */
 
     /* Take the current (hopefully pristine) tty mode and make */
     /* a raw mode based on it now, before we do anything else with it */
@@ -746,9 +735,9 @@ subshell_name_quote (const char *s)
     }
 
     /* Factor 5 because we need \, 0 and 3 other digits per character. */
-    d = ret = g_malloc (1 + (5 * strlen (s)) + (strlen(quote_cmd_start))
+    d = ret = g_try_malloc (1 + (5 * strlen (s)) + (strlen(quote_cmd_start))
 				+ (strlen(quote_cmd_end)));
-    if (!d)
+    if (d == NULL)
 	return NULL;
 
     /* Prevent interpreting leading `-' as a switch for `cd' */

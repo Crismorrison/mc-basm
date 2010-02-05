@@ -56,8 +56,10 @@
 
 #include <config.h>
 
-#include "../src/global.h"
-#include "../src/wtools.h"
+#include "lib/global.h"
+#include "src/wtools.h"
+#include "lib/vfs/mc-vfs/vfs.h"
+
 #include "internal.h"
 
 /*** global variables ****************************************************************************/
@@ -110,6 +112,18 @@ mcview_get_filesize (mcview_t * view)
     default:
         assert (!"Unknown datasource type");
         return 0;
+    }
+}
+
+/* --------------------------------------------------------------------------------------------- */
+
+void
+mcview_update_filesize (mcview_t * view)
+{
+    if (view->datasource == DS_FILE) {
+        struct stat st;
+        if (mc_fstat (view->ds_file_fd, &st) != -1)
+            view->ds_file_filesize = st.st_size;
     }
 }
 

@@ -27,16 +27,15 @@
 #include <string.h>
 #include <sys/stat.h>
 
-#include "../src/tty/tty.h"
+#include "lib/global.h"
+#include "lib/tty/tty.h"
+#include "lib/search.h"
+#include "lib/vfs/mc-vfs/vfs.h"
+#include "lib/fs.h"
+#include "lib/strutil.h"
 
-#include "../src/search/search.h"
-
-#include "global.h"
 #include "wtools.h"
 #include "treestore.h"
-#include "strutil.h"
-#include "fs.h"
-#include "util.h"		/* canonicalize_pathname () */
 #include "dir.h"
 
 /* If true show files starting with a dot */
@@ -47,13 +46,6 @@ int show_backups = 1;
 
 /* If false then directories are shown separately from files */
 int mix_all_files = 0;
-
-/*
- * If true, SI units (1000 based) will be used for
- * larger units (kilobyte, megabyte, ...).
- * If false binary units (1024 based) will be used.
- */
-int kilobyte_si = 0;
 
 /* Reverse flag */
 static int reverse = 1;
@@ -265,8 +257,8 @@ set_zero_dir (dir_list *list)
 {
     /* Need to grow the *list? */
     if (list->size == 0) {
-	list->list = g_realloc (list->list, sizeof (file_entry) *
-			      (list->size + RESIZE_STEPS));
+	list->list = g_try_realloc (list->list, sizeof (file_entry) *
+						(list->size + RESIZE_STEPS));
 	if (list->list == NULL)
 	    return FALSE;
 
@@ -287,7 +279,7 @@ set_zero_dir (dir_list *list)
 /* If you change handle_dirent then check also handle_path. */
 /* Return values: -1 = failure, 0 = don't add, 1 = add to the list */
 static int
-handle_dirent (dir_list *list, const char *filter, struct dirent *dp,
+handle_dirent (dir_list *list, const char *fltr, struct dirent *dp,
 	       struct stat *buf1, int next_free, int *link_to_dir,
 	       int *stale_link)
 {
@@ -321,16 +313,15 @@ handle_dirent (dir_list *list, const char *filter, struct dirent *dp,
 	else
 	    *stale_link = 1;
     }
-    if (!(S_ISDIR (buf1->st_mode) || *link_to_dir) && filter
-	&& !mc_search(filter, dp->d_name, MC_SEARCH_T_GLOB) )
+    if (!(S_ISDIR (buf1->st_mode) || *link_to_dir) && (fltr != NULL)
+	&& !mc_search (fltr, dp->d_name, MC_SEARCH_T_GLOB))
 	    return 0;
 
     /* Need to grow the *list? */
     if (next_free == list->size) {
-	list->list =
-	    g_realloc (list->list,
-		       sizeof (file_entry) * (list->size + RESIZE_STEPS));
-	if (!list->list)
+	list->list = g_try_realloc (list->list, sizeof (file_entry) *
+						(list->size + RESIZE_STEPS));
+	if (list->list == NULL)
 	    return -1;
 	list->size += RESIZE_STEPS;
     }
@@ -390,9 +381,9 @@ handle_path (dir_list *list, const char *path,
 
     /* Need to grow the *list? */
     if (next_free == list->size){
-	list->list = g_realloc (list->list, sizeof (file_entry) *
-			      (list->size + RESIZE_STEPS));
-	if (!list->list)
+	list->list = g_try_realloc (list->list, sizeof (file_entry) *
+						(list->size + RESIZE_STEPS));
+	if (list->list == NULL)
 	    return -1;
 	list->size += RESIZE_STEPS;
     }
@@ -401,7 +392,7 @@ handle_path (dir_list *list, const char *path,
 
 int
 do_load_dir (const char *path, dir_list *list, sortfn *sort, int lc_reverse,
-	     int lc_case_sensitive, int exec_ff, const char *filter)
+	     int lc_case_sensitive, int exec_ff, const char *fltr)
 {
     DIR *dirp;
     struct dirent *dp;
@@ -431,7 +422,7 @@ do_load_dir (const char *path, dir_list *list, sortfn *sort, int lc_reverse,
 
     while ((dp = mc_readdir (dirp))) {
 	status =
-	    handle_dirent (list, filter, dp, &st, next_free, &link_to_dir,
+	    handle_dirent (list, fltr, dp, &st, next_free, &link_to_dir,
 			   &stale_link);
 	if (status == 0)
 	    continue;
@@ -488,33 +479,23 @@ static dir_list dir_copy = { 0, 0 };
 static void
 alloc_dir_copy (int size)
 {
-    int i;
-
-    if (dir_copy.size < size){
-	if (dir_copy.list){
-
-	    for (i = 0; i < dir_copy.size; i++) {
+    if (dir_copy.size < size) {
+	if (dir_copy.list) {
+	    int i;
+	    for (i = 0; i < dir_copy.size; i++)
 		g_free (dir_copy.list [i].fname);
-	    }
 	    g_free (dir_copy.list);
-	    dir_copy.list = 0;
 	}
 
-	dir_copy.list = g_new (file_entry, size);
-	for (i = 0; i < size; i++) {
-	    dir_copy.list [i].fname = NULL;
-            dir_copy.list [i].sort_key = NULL;
-            dir_copy.list [i].second_sort_key = NULL;
-        }
-
+	dir_copy.list = g_new0 (file_entry, size);
 	dir_copy.size = size;
     }
 }
 
-/* If filter is null, then it is a match */
+/* If fltr is null, then it is a match */
 int
 do_reload_dir (const char *path, dir_list *list, sortfn *sort, int count,
-	       int rev, int lc_case_sensitive, int exec_ff, const char *filter)
+	       int rev, int lc_case_sensitive, int exec_ff, const char *fltr)
 {
     DIR *dirp;
     struct dirent *dp;
@@ -568,7 +549,7 @@ do_reload_dir (const char *path, dir_list *list, sortfn *sort, int count,
 
     while ((dp = mc_readdir (dirp))) {
 	status =
-	    handle_dirent (list, filter, dp, &st, next_free, &link_to_dir,
+	    handle_dirent (list, fltr, dp, &st, next_free, &link_to_dir,
 			   &stale_link);
 	if (status == 0)
 	    continue;

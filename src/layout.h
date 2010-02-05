@@ -9,26 +9,27 @@
 #include "panel.h"
 #include "widget.h"
 
+void layout_change (void);
 void layout_cmd (void);
 void setup_panels (void);
 void destroy_panels (void);
 void sigwinch_handler (int dummy);
 void change_screen_size (void);
-void set_display_type (int num, int type);
+void set_display_type (int num, panel_view_mode_t type);
 void swap_panels (void);
-int get_display_type (int index);
-int get_current_type (void);
-int get_other_type (void);
+panel_view_mode_t get_display_type (int idx);
+panel_view_mode_t get_current_type (void);
+panel_view_mode_t get_other_type (void);
 int get_current_index (void);
 int get_other_index (void);
 const char *get_nth_panel_name (int num);
 
-struct Widget *get_panel_widget (int index);
+struct Widget *get_panel_widget (int idx);
 
 struct WPanel *get_other_panel (void);
 
-void save_panel_dir (int index);
-Widget *restore_into_right_dir_panel (int index, Widget *from_widget);
+void save_panel_dir (int idx);
+Widget *restore_into_right_dir_panel (int idx, Widget *from_widget);
 const char *get_panel_dir_for (const WPanel *widget);
 
 void set_hintbar (const char *str);

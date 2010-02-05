@@ -6,7 +6,7 @@
 #ifndef MC_MAIN_H
 #define MC_MAIN_H
 
-#include "global.h"
+#include "lib/global.h"
 #include "keybind.h"
 
 /* Toggling functions */
@@ -55,7 +55,6 @@ extern int full_eight_bits;
 
 extern int utf8_display;
 
-extern int confirm_view_dir;
 extern int fast_refresh;
 extern int navigate_with_arrows;
 extern int drop_menus;
@@ -68,6 +67,8 @@ extern int confirm_directory_hotlist_delete;
 extern int confirm_execute;
 extern int confirm_exit;
 extern int confirm_overwrite;
+extern int confirm_history_cleanup;
+extern int confirm_view_dir;
 extern int boot_current_is_left;
 extern int use_file_to_check_type;
 extern int vfs_use_limit;
@@ -123,7 +124,7 @@ void load_hint      (int force);
 void print_vfs_message(const char *msg, ...)
     __attribute__ ((format (__printf__, 1, 2)));
 
-extern const char *prompt;
+extern const char *mc_prompt;
 extern const char *edit_one_file;
 extern char *mc_home;
 extern char *mc_home_alt;

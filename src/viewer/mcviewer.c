@@ -39,16 +39,16 @@
 #include <errno.h>
 #include <fcntl.h>
 
-#include "../src/global.h"
+#include "lib/global.h"
+#include "lib/tty/tty.h"
+#include "lib/vfs/mc-vfs/vfs.h"
+#include "lib/strutil.h"
 
-#include "../src/tty/tty.h"
-
-#include "../src/strutil.h"
-#include "../src/main.h"
-#include "../src/charsets.h"
-#include "../src/main-widgets.h"	/* the_menubar */
-#include "../src/menu.h"		/* menubar_visible */
-#include "../src/widget.h"
+#include "src/main.h"
+#include "src/charsets.h"
+#include "src/main-widgets.h"	/* the_menubar */
+#include "src/menu.h"		/* menubar_visible */
+#include "src/widget.h"
 
 #include "internal.h"
 #include "mcviewer.h"
@@ -72,6 +72,8 @@ int mcview_max_dirt_limit = 10;
 /* Scrolling is done in pages or line increments */
 int mcview_mouse_move_pages = 1;
 
+/* end of file will be showen from mcview_show_eof */
+char *mcview_show_eof = NULL;
 
 /*** file scope macro definitions ****************************************************************/
 
@@ -187,7 +189,7 @@ mcview_set_keymap (mcview_t * view)
 /* --------------------------------------------------------------------------------------------- */
 
 mcview_t *
-mcview_new (int y, int x, int cols, int lines, int is_panel)
+mcview_new (int y, int x, int lines, int cols, int is_panel)
 {
     mcview_t *view = g_new0 (mcview_t, 1);
     size_t i;
@@ -270,7 +272,7 @@ mcview_viewer (const char *command, const char *file, int *move_dir_p, int start
     view_dlg = create_dlg (0, 0, LINES, COLS, NULL, mcview_dialog_callback,
                             "[Internal File Viewer]", NULL, DLG_WANT_TAB);
 
-    lc_mcview = mcview_new (0, 0, COLS, LINES - 1, 0);
+    lc_mcview = mcview_new (0, 0, LINES - 1, COLS, 0);
     add_widget (view_dlg, lc_mcview);
 
     add_widget (view_dlg, buttonbar_new (TRUE));
@@ -376,14 +378,16 @@ mcview_load (mcview_t * view, const char *command, const char *file, int start_l
     view->dpy_text_column = 0;
 
     mcview_compute_areas (view);
-    assert (view->bytes_per_line != 0);
+    mcview_update_bytes_per_line (view);
+
     if (mcview_remember_file_position && view->filename != NULL && start_line == 0) {
         long line, col;
-
+        off_t new_offset;
         canon_fname = vfs_canon (view->filename);
-        load_file_position (canon_fname, &line, &col);
+        load_file_position (canon_fname, &line, &col, &new_offset);
+        new_offset = min (new_offset, mcview_get_filesize (view));
+        view->dpy_start = mcview_bol (view, new_offset);
         g_free (canon_fname);
-        mcview_moveto (view, mcview_offset_doz (line, 1), col);
     } else if (start_line > 0) {
         mcview_moveto (view, start_line - 1, 0);
     }

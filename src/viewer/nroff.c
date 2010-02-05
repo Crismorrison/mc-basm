@@ -37,11 +37,11 @@
 
 #include <config.h>
 
-#include "../src/global.h"
-#include "../src/main.h"
-#include "../src/charsets.h"
-#include "../src/tty/tty.h"
-#include "../src/skin/skin.h"
+#include "lib/global.h"
+#include "src/main.h"
+#include "src/charsets.h"
+#include "lib/tty/tty.h"
+#include "lib/skin.h"
 #include "internal.h"
 
 
@@ -226,12 +226,12 @@ mcview_nroff_seq_new_num (mcview_t * view, off_t lc_index)
 {
     mcview_nroff_t *nroff;
 
-    nroff = g_malloc0 (sizeof (mcview_nroff_t));
-    if (nroff == NULL)
-        return NULL;
-    nroff->index = lc_index;
-    nroff->view = view;
-    mcview_nroff_seq_info (nroff);
+    nroff = g_try_malloc0 (sizeof (mcview_nroff_t));
+    if (nroff != NULL) {
+	nroff->index = lc_index;
+	nroff->view = view;
+	mcview_nroff_seq_info (nroff);
+    }
     return nroff;
 }
 
