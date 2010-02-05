@@ -140,48 +140,6 @@ mcview_display_status (mcview_t * view)
 
     file_label = view->filename ? view->filename : view->command ? view->command : "";
     file_label_width = str_term_width1 (file_label) - 2;
-<<<<<<< HEAD
-    file_name = view->filename ? view->filename : view->command ? view->command : "";
-
-    if (width < file_label_width + 6)
-        tty_print_string (str_fit_to_term (file_name, width, J_LEFT_FIT));
-    else {
-        i = (width > 22 ? 22 : width) - file_label_width;
-
-        tmp = g_strdup_printf (file_label, str_fit_to_term (file_name, i, J_LEFT_FIT));
-        tty_print_string (tmp);
-        g_free (tmp);
-        if (width > 46) {
-            widget_move (view, top, left + 24);
-            /* FIXME: the format strings need to be changed when off_t changes */
-            if (view->hex_mode)
-                tty_printf (_("Offset 0x%08lx"), (unsigned long) view->hex_cursor);
-            else {
-                off_t line, col;
-                mcview_offset_to_coord (view, &line, &col, view->dpy_start);
-                tty_printf (_("Line %lu Col %lu"),
-                            (unsigned long) line + 1,
-                            (unsigned long) (view->text_wrap_mode ? col : view->dpy_text_column));
-            }
-        }
-        if (width > 62) {
-            off_t filesize;
-            filesize = mcview_get_filesize (view);
-            widget_move (view, top, left + 43);
-            if (!mcview_may_still_grow (view)) {
-                tty_printf (_("%s bytes"), size_trunc (filesize));
-            } else {
-                tty_printf (_(">= %s bytes"), size_trunc (filesize));
-            }
-        }
-	if (width > 62 + 11){
-	    char* cp = get_codepage_id (source_codepage);
-	    if(cp)
-		tty_printf ("    %s", cp);
-        }
-        if (width > 26) {
-            mcview_percent (view, view->hex_mode ? view->hex_cursor : view->dpy_end);
-=======
     if (width > 40) {
         char buffer [BUF_TINY];
         widget_move (view, top, width - 32);
@@ -198,7 +156,6 @@ mcview_display_status (mcview_t * view)
                         ""
 #endif
                         );
->>>>>>> origin/master
         }
     }
     widget_move (view, top, left);
